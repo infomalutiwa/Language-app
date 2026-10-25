@@ -1,0 +1,15 @@
+# One-click hosting on Render (free plan, automatic HTTPS):
+#   Dashboard -> New -> Blueprint -> connect the GitHub repo -> pick the branch -> paste GEMINI_API_KEY.
+services:
+  - type: web
+    name: vorbi
+    runtime: docker
+    plan: free
+    healthCheckPath: /api/status
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: TRUST_PROXY
+        value: "1"
+      - key: DAILY_SECONDS
+        value: "600"

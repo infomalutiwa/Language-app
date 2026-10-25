@@ -1,0 +1,10 @@
+node_modules
+dist
+android
+release
+.git
+.github
+.env
+.env.*
+*.jks
+server/.usage.json

@@ -41,3 +41,11 @@ VITE_API_BASE=https://dein-server npm run android
 ```
 
 Der Server erlaubt die Origins der App (`https://localhost`, `capacitor://localhost`); weitere über `ALLOWED_ORIGINS`.
+
+## Hosting (Web + API in einem Container)
+
+`Dockerfile` baut die Web-App und startet den Server. Auf Render: Dashboard → New → **Blueprint** → GitHub-Repo und
+Branch wählen → `GEMINI_API_KEY` einfügen. HTTPS ist automatisch, `render.yaml` setzt `TRUST_PROXY=1`.
+Cloud Run: `gcloud run deploy vorbi --source . --allow-unauthenticated --set-env-vars TRUST_PROXY=1 --set-secrets GEMINI_API_KEY=...`.
+Danach die APK mit `VITE_API_BASE=https://deine-adresse npm run android` neu bauen (oder die Adresse in den App-Optionen eintragen).
+Tageslimits liegen in `server/.usage.json` im Container und werden bei einem Neustart zurückgesetzt.
