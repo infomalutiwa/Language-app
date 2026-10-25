@@ -21,7 +21,7 @@ export const api = {
     if (direct.isDirect()) return direct.directToken(scenario, retry);
     const { level, help, voice } = store.get().settings;
     // Learner's own words let the tutor practise exactly what they are learning.
-    const words = store.get().vocab.slice(-10).map((w) => w.de);
+    const words = store.practiceWords(10);
     return post('/api/token', { scenario, level, help, voice, words, ...retry });
   },
   liveOk: (sessionId) => (direct.isDirect() ? direct.liveWorked() : post('/api/live-ok', { sessionId }).catch(() => {})),

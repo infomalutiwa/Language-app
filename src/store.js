@@ -81,6 +81,8 @@ export const store = {
     save();
     return true;
   },
+  // Words to practise in a live call: due ones first, then the newest, without duplicates.
+  practiceWords: (n = 10) => [...new Set([...store.dueWords(), ...[...state.vocab].reverse()].map((w) => w.de))].slice(0, n),
   dueWords: () => state.vocab.filter((w) => w.due <= Date.now()).sort((a, b) => a.due - b.due),
   // grade: 0 again, 1 hard, 2 good, 3 easy. A small SM-2 variant.
   grade(de, grade) {

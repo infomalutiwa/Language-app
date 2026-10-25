@@ -58,7 +58,7 @@ export async function directToken(scenario, retry = {}) {
   if (!model) throw Object.assign(new Error('no_model_available'), { code: 'no_model_available' });
   lastLive = model;
   const { level, help, voice } = store.get().settings;
-  const words = store.get().vocab.slice(-10).map((w) => w.de.replace(/[^\p{L}\s'-]/gu, '').slice(0, 40)).filter(Boolean);
+  const words = store.practiceWords(10).map((de) => de.replace(/[^\p{L}\s'-]/gu, '').slice(0, 40)).filter(Boolean);
   return {
     direct: true,
     token: geminiKey(),

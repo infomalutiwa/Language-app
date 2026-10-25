@@ -345,3 +345,13 @@ h1 .bi .de, h2 .bi .de, h3 .bi .de, .sect .bi .de { color: var(--de-ink); }
 .controls { gap: 8px; }
 .controls .pill { padding: 0 10px; min-width: 0; flex: 1 1 0; }
 .controls .pill .icon { width: 18px; height: 18px; }
+
+/* ---- talk screen polish ---- */
+.bub.ai { background: var(--de-bg); }
+.bub .ro { margin-top: 10px; padding: 8px 12px; border: 0; border-radius: 16px; background: var(--ro-bg); color: var(--ro-ink); font-size: 15px; }
+.bub-tools { display: flex; gap: 6px; margin-top: 8px; }
+.bub-tools .pill { min-height: 32px; min-width: 40px; }
+.bub-tools .icon { width: 16px; height: 16px; }
+.bub.me .de { color: var(--ink); }
+.transcript { gap: 12px; }
+.talk-head .pill[aria-pressed="true"] { background: var(--ro-bg); color: var(--ro-ink); }

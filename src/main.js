@@ -147,7 +147,7 @@ const views = {
         <a class="pill ghost sm tap" href="#/scenarios" id="leave" aria-label="${bt('Zurück', 'Înapoi')}">${icon('back')}</a>
         <h3>${b(...sc.t)}</h3>
         <span class="pill glass sm" id="timer">0:00</span>
-        <button class="pill ghost sm" id="ro-toggle" aria-pressed="${s.translate}">${s.translate ? 'DE+RO' : 'DE'}</button>
+        <button class="pill ghost sm" id="ro-toggle" aria-pressed="${s.translate}" aria-label="${bt('Rumänische Übersetzung automatisch', 'Traducere automată în română')}">${s.translate ? 'DE+RO' : 'DE'}</button>
       </div>
       <div class="transcript" id="transcript" aria-live="polite"></div>
       <div class="stage">
@@ -454,16 +454,27 @@ wire.talk = (id) => {
   const words = (t) => t.split(/([A-Za-zÄÖÜäöüßăâîșțĂÂÎȘȚ]{3,})/).map((tok, i) => (i % 2 ? `<span class="w">${esc(tok)}</span>` : esc(tok))).join('');
   const bubbleEl = (role) => {
     const el = document.createElement('div');
-    el.className = `bub ${role === 'me' ? 'me' : ''}`;
-    el.innerHTML = `<div class="de"></div><span class="live"></span>${role === 'ai' ? `<div class="row" style="margin-top:6px"><button class="pill ghost sm" data-ro>RO</button></div>` : ''}`;
+    el.className = `bub ${role === 'me' ? 'me' : 'ai'}`;
+    el.innerHTML = `<div class="de"></div><span class="live"></span>${role === 'ai' ? `<div class="bub-tools"><button class="pill ghost sm" data-say aria-label="${bt('Anhören', 'Ascultă')}">${icon('play')}</button><button class="pill ghost sm" data-ro>RO</button></div>` : ''}`;
     box.append(el);
     return el;
   };
+  const loadRo = async (bub, force) => {
+    let el = bub.querySelector('.ro');
+    if (el && !force) return;
+    if (!el) { bub.insertAdjacentHTML('beforeend', '<div class="ro">…</div>'); el = bub.querySelector('.ro'); }
+    try { el.textContent = (await api.translate(bub.dataset.text)).ro; } catch { el.textContent = 'Übersetzung gerade nicht verfügbar · Traducerea nu este disponibilă'; }
+  };
   const onText = ({ role, text, final }) => {
-    if (final) { cur?.querySelector('.live')?.remove(); cur = null; lastRole = null; return; }
+    if (final) {
+      const done = cur;
+      cur?.querySelector('.live')?.remove(); cur = null; lastRole = null;
+      if (done && done.classList.contains('ai') && showRo() && done.dataset.text?.length > 3) loadRo(done);
+      return;
+    }
     if (!text) return;
     if (!cur || role !== lastRole) { cur?.querySelector('.live')?.remove(); cur = bubbleEl(role); lastRole = role; cur.dataset.text = ''; }
-    cur.dataset.text += text;
+    cur.dataset.text += text.replace(/[*_`#]+/g, '');
     cur.querySelector('.de').innerHTML = role === 'ai' ? words(cur.dataset.text) : esc(cur.dataset.text);
     box.scrollTop = box.scrollHeight;
   };
@@ -475,12 +486,16 @@ wire.talk = (id) => {
       toast(ok ? bt(`„${word}“ gespeichert`, 'salvat') : bt('Schon gespeichert', 'Deja salvat'));
       if (ok) api.translate(word).then((r) => { const v = store.get().vocab.find((x) => x.de === word); if (v) { v.ro = r.ro; store.set({}); } }).catch(() => {});
     }
+    const say = e.target.closest('button[data-say]');
+    if (say && 'speechSynthesis' in window) {
+      speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(say.closest('.bub').dataset.text); u.lang = 'de-DE'; u.rate = 0.85; speechSynthesis.speak(u);
+    }
     const ro = e.target.closest('button[data-ro]');
     if (ro) {
       const bub = ro.closest('.bub');
       if (bub.querySelector('.ro')) return bub.querySelector('.ro').remove();
-      bub.insertAdjacentHTML('beforeend', '<div class="ro muted">…</div>');
-      try { bub.querySelector('.ro').textContent = (await api.translate(bub.dataset.text)).ro; } catch { bub.querySelector('.ro').textContent = 'Übersetzung gerade nicht verfügbar · Traducerea nu este disponibilă'; }
+      loadRo(bub);
     }
   };
   box.addEventListener('click', onBoxClick);
@@ -489,6 +504,8 @@ wire.talk = (id) => {
     store.setting({ translate: next });
     e.currentTarget.setAttribute('aria-pressed', next);
     e.currentTarget.textContent = next ? 'DE+RO' : 'DE';
+    if (next) { const last = [...box.querySelectorAll('.bub.ai')].pop(); if (last?.dataset.text) loadRo(last); }
+    else box.querySelectorAll('.bub .ro').forEach((el) => el.remove());
   };
   const suggestWords = async () => {
     const transcript = [...box.querySelectorAll('.bub')].map((el) => `${el.classList.contains('me') ? 'Lernender' : 'Lehrerin'}: ${el.dataset.text ?? ''}`).join('\n');
