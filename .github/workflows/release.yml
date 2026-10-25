@@ -1,9 +1,10 @@
 # Publishes a signed APK to GitHub Releases. The app checks the latest release and updates itself.
-# Release steps: bump "version" in package.json, commit, then `git tag v<version> && git push --tags`.
+# Release steps: bump "version" in package.json, commit, then push a tag v<version> or run this workflow manually (Actions tab).
 name: Release APK
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
 permissions:
   contents: write
 jobs:
@@ -21,8 +22,8 @@ jobs:
           packages: ''
       - run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
       - run: npm ci
-      - name: Tag must match package.json
-        run: test "v$(node -p "require('./package.json').version")" = "${GITHUB_REF_NAME}"
+      - name: Release tag from package.json
+        run: echo "TAG=v$(node -p "require('./package.json').version")" >> "$GITHUB_ENV"
       - run: npm test
       - name: Restore signing key
         env:
@@ -43,11 +44,13 @@ jobs:
         run: $ANDROID_HOME/build-tools/36.0.0/apksigner verify --print-certs android/app/build/outputs/apk/release/app-release.apk
       - name: Name the artifacts
         run: |
-          cp android/app/build/outputs/apk/release/app-release.apk "Vorbi-${GITHUB_REF_NAME}.apk"
-          cp android/app/build/outputs/bundle/release/app-release.aab "Vorbi-${GITHUB_REF_NAME}.aab"
+          cp android/app/build/outputs/apk/release/app-release.apk "Vorbi-${TAG}.apk"
+          cp android/app/build/outputs/bundle/release/app-release.aab "Vorbi-${TAG}.aab"
       - uses: softprops/action-gh-release@v2
         with:
           files: |
-            Vorbi-${{ github.ref_name }}.apk
-            Vorbi-${{ github.ref_name }}.aab
+            Vorbi-${{ env.TAG }}.apk
+            Vorbi-${{ env.TAG }}.aab
+          tag_name: ${{ env.TAG }}
+          target_commitish: ${{ github.sha }}
           generate_release_notes: true
