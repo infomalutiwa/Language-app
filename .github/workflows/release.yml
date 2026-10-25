@@ -1,0 +1,51 @@
+# Publishes a signed APK to GitHub Releases. The app checks the latest release and updates itself.
+# Release steps: bump "version" in package.json, commit, then `git tag v<version> && git push --tags`.
+name: Release APK
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 21 }
+      - uses: android-actions/setup-android@v3
+      - run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+      - run: npm ci
+      - name: Tag must match package.json
+        run: test "v$(node -p "require('./package.json').version")" = "${GITHUB_REF_NAME}"
+      - run: npm test
+      - name: Restore signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          echo "$KEYSTORE_B64" | base64 -d > android/vorbi-release.jks
+          {
+            echo "storeFile=vorbi-release.jks"
+            echo "storePassword=$KEYSTORE_PASSWORD"
+            echo "keyAlias=$KEY_ALIAS"
+            echo "keyPassword=$KEY_PASSWORD"
+          } > android/keystore.properties
+      - name: Build APK
+        env:
+          VITE_API_BASE: ${{ vars.VITE_API_BASE }}
+        run: npm run android
+      - name: Name the artifacts
+        run: |
+          cp android/app/build/outputs/apk/release/app-release.apk "Vorbi-${GITHUB_REF_NAME}.apk"
+          cp android/app/build/outputs/bundle/release/app-release.aab "Vorbi-${GITHUB_REF_NAME}.aab"
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            Vorbi-${{ github.ref_name }}.apk
+            Vorbi-${{ github.ref_name }}.aab
+          generate_release_notes: true

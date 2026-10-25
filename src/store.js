@@ -6,7 +6,7 @@ const uuid = () => (crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toSt
 
 const defaults = () => ({
   deviceId: uuid(),
-  settings: { theme: 'auto', glass: 'full', level: 'A2', help: 'mixed', translate: true, ro: true, voice: 'Kore', server: '' },
+  settings: { theme: 'auto', glass: 'full', level: 'A2', help: 'mixed', translate: true, ro: true, voice: 'Kore', server: '', autoUpdate: true },
   vocab: [],
   daily: { date: todayStr(), talked: false, reviewed: false, translated: false, sec: 0, newWords: 0 },
   history: [],
@@ -39,6 +39,16 @@ export const store = {
     state.daily.sec += sec;
     state.history = [...new Set([...state.history, todayStr()])];
     save();
+  },
+  // Consecutive days with a conversation, counting today only if already done.
+  streak() {
+    const days = new Set(state.history);
+    let n = 0;
+    for (let i = 0; i < 400; i++) {
+      const d = new Date(Date.now() - i * 864e5).toISOString().slice(0, 10);
+      if (days.has(d)) n++; else if (i > 0) break;
+    }
+    return n;
   },
   weekDots() {
     const out = [];

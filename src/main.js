@@ -6,6 +6,8 @@ import { SCENARIOS, scenarioById } from './data.js';
 import { PACKS, packById, TOTAL_WORDS } from './words.js';
 import { esc, b, bt, mmss, isNative } from './ui.js';
 import { trainerView, trainerWire } from './trainer.js';
+import { playIntro } from './intro.js';
+import { updatesEnabled, checkForUpdate, downloadUpdate, installUpdate, currentVersion } from './updater.js';
 import { LiveSession } from './live.js';
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -78,26 +80,43 @@ const views = {
     const d = s.daily;
     const due = store.dueWords().length;
     const h = new Date().getHours();
-    const greet = h < 11 ? b('Guten Morgen!', 'Bună dimineața!') : h < 18 ? b('Hallo!', 'Salut!') : b('Guten Abend!', 'Bună seara!');
+    const greet = h < 11 ? b('Guten Morgen', 'Bună dimineața') : h < 18 ? b('Hallo', 'Salut') : b('Guten Abend', 'Bună seara');
     const last = scenarioById(s.lastScenario) ?? SCENARIOS[0];
-    const task = (done, label, href) => `<a class="task tap ${done ? 'done' : ''}" href="${href}"><span class="dot">${done ? icon('check') : ''}</span><span class="t">${label}</span></a>`;
-    return `<div class="stack">
+    const goals = [
+      { done: d.talked, ic: 'mic', t: b('Sprechen', 'Vorbește'), href: `#/talk/${last.id}` },
+      { done: d.reviewed || (s.vocab.length > 0 && due === 0), ic: 'book', t: b(due ? `${due} wiederholen` : 'Wiederholen', due ? `${due} de repetat` : 'Repetă'), href: '#/vocab' },
+      { done: (d.newWords ?? 0) >= 5, ic: 'plus', t: b(`Neue Wörter ${Math.min(d.newWords ?? 0, 5)}/5`, `Cuvinte noi ${Math.min(d.newWords ?? 0, 5)}/5`), href: '#/packs' },
+      { done: (d.sentences ?? 0) >= 3, ic: 'chat', t: b(`Sätze ${Math.min(d.sentences ?? 0, 3)}/3`, `Propoziții ${Math.min(d.sentences ?? 0, 3)}/3`), href: '#/sentences' },
+    ];
+    const doneN = goals.filter((g) => g.done).length;
+    const R = 46, C = 2 * Math.PI * R;
+    const ring = `<svg class="ring" viewBox="0 0 110 110" role="img" aria-label="${doneN} / ${goals.length}">
+      <circle cx="55" cy="55" r="${R}" class="ring-bg"/><circle cx="55" cy="55" r="${R}" class="ring-fg" stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - doneN / goals.length)}" transform="rotate(-90 55 55)"/>
+      <text x="55" y="53" text-anchor="middle" class="ring-n">${doneN}/${goals.length}</text><text x="55" y="72" text-anchor="middle" class="ring-l">${bt('Ziele', 'ținte')}</text></svg>`;
+    const streak = store.streak();
+    const stat = (n, de, ro) => `<div class="stat glass"><strong>${n}</strong><span>${b(de, ro)}</span></div>`;
+    const act = (href, ic, de, ro, hue) => `<a class="act glass tap" href="${href}" style="--h:${hue}"><span class="ico">${icon(ic)}</span><span class="t">${b(de, ro)}</span></a>`;
+    return `<div class="stack dash">
       ${isNative && !apiBase() ? `<a class="glass card tap" href="#/settings" style="display:block;border-color:var(--err)"><strong>${b('Server-Adresse fehlt', 'Lipsește adresa serverului')}</strong><div class="muted small">${b('Trage in den Optionen die Adresse deines Vorbi-Servers ein.', 'Introdu în Setări adresa serverului tău Vorbi.')}</div></a>` : ''}
-      <div class="hero"><p class="muted" style="margin:0">${greet}</p><h1>${b('Lass uns<br>Deutsch sprechen.', 'Hai să vorbim germană.')}</h1></div>
-      <section class="glass card stack" aria-label="${bt('Heute', 'Azi')}">
-        <div class="row between"><h3>${b('Heute', 'Azi')}</h3><div class="week" title="${bt('Letzte 7 Tage', 'Ultimele 7 zile')}">${store.weekDots().map((on) => `<i class="${on ? 'on' : ''}"></i>`).join('')}</div></div>
-        ${task(d.talked, b(`Gespräch: ${last.t[0]}`, `Conversație: ${last.t[1]}`), `#/talk/${last.id}`)}
-        ${task(d.reviewed, due ? b(`${due} Wörter wiederholen`, `${due} cuvinte de repetat`) : b('Wörter wiederholen (keine fällig)', 'Repetă cuvinte (niciunul)'), '#/vocab')}
-        ${task((d.newWords ?? 0) >= 5, b(`5 neue Wörter lernen (${Math.min(d.newWords ?? 0, 5)}/5)`, `Învață 5 cuvinte noi (${Math.min(d.newWords ?? 0, 5)}/5)`), '#/packs')}
-        ${task((d.sentences ?? 0) >= 3, b(`3 Sätze sprechen (${Math.min(d.sentences ?? 0, 3)}/3)`, `Spune 3 propoziții (${Math.min(d.sentences ?? 0, 3)}/3)`), '#/sentences')}
-        ${task(d.translated, b('Dolmetscher-Übung (5 Min.)', 'Exercițiu Dolmetscher (5 min)'), '#/translator')}
-        <a class="pill primary" href="#/talk/${last.id}">${b('Weiter', 'Continuă')} ${icon('mic')}</a>
+      <div class="row between dash-top">
+        <div><p class="muted" style="margin:0">${greet}</p><h1>${b('Dein Tag', 'Ziua ta')}</h1></div>
+        <div class="stack" style="gap:6px;align-items:flex-end"><span class="pill glass sm">${s.settings.level}</span><span class="pill glass sm" title="${bt('Serie', 'Serie')}">${icon('refresh')} ${b(`${streak} ${streak === 1 ? 'Tag' : 'Tage'}`, `${streak} ${streak === 1 ? 'zi' : 'zile'}`)}</span></div>
+      </div>
+      <section class="glass card goals" aria-label="${bt('Tagesziele', 'Ținte zilnice')}">
+        ${ring}
+        <div class="goal-list">${goals.map((g) => `<a class="goal tap ${g.done ? 'done' : ''}" href="${g.href}"><span class="gi">${g.done ? icon('check') : icon(g.ic)}</span><span class="gt">${g.t}</span></a>`).join('')}</div>
       </section>
-      <section class="glass card stack">
-        <div class="row between"><h3>${b('Dolmetscher', 'Interpret')}</h3>${icon('swap')}</div>
-        <p class="muted" style="margin:0">${b('Du sprichst Rumänisch, die App sagt es auf Deutsch. Beim Arzt, auf dem Amt, überall.', 'Vorbești românește, aplicația spune în germană. La medic, la primărie, oriunde.')}</p>
-        <a class="pill ghost" href="#/translator">${b('Öffnen', 'Deschide')}</a>
-      </section>
+      <a class="pill primary cta" href="#/talk/${last.id}">${icon('mic')} ${b(`Weiter: ${last.t[0]}`, `Continuă: ${last.t[1]}`)}</a>
+      <div class="stats">${stat(s.vocab.length, 'Wörter', 'cuvinte')}${stat(due, 'fällig', 'de repetat')}${stat(Math.round((d.sec ?? 0) / 60), 'Min. heute', 'min azi')}</div>
+      <h3 class="sect">${b('Schnellstart', 'Start rapid')}</h3>
+      <div class="acts">
+        ${act(`#/talk/tutor`, 'chat', 'Lehrerin', 'Profesoara', 150)}
+        ${act('#/sentences', 'mic', 'Sätze', 'Propoziții', 265)}
+        ${act('#/packs', 'book', 'Wortpakete', 'Pachete', 30)}
+        ${act('#/translator', 'swap', 'Dolmetscher', 'Interpret', 205)}
+      </div>
+      <h3 class="sect">${b('Situationen', 'Situații')}</h3>
+      <div class="chips">${SCENARIOS.filter((x) => x.id !== 'tutor').map((x) => `<a class="pill glass chip" href="#/talk/${x.id}">${icon(x.icon)} ${b(...x.t)}</a>`).join('')}</div>
     </div>`;
   },
 
@@ -220,6 +239,9 @@ const views = {
         <div class="item">${b('Hilfe auf Rumänisch', 'Ajutor în română')}${seg('help', [['de', b('Nein', 'Nu')], ['mixed', b('Wenig', 'Puțin')], ['ro', b('Viel', 'Mult')]])}</div>
       </div>
       ${isNative ? `<div class="group glass"><div class="item" style="flex-wrap:wrap"><div><strong>${b('Server-Adresse', 'Adresa serverului')}</strong><div class="muted small">https://…</div></div><input id="server" class="glass-2 free-box" style="padding:10px 14px;font-size:16px" inputmode="url" autocapitalize="off" autocomplete="off" value="${esc(s.server || apiBase())}" placeholder="https://vorbi.example.com"></div></div>` : ''}
+      ${updatesEnabled ? `<div class="group glass">
+        <div class="item"><div><strong>${b('App-Update', 'Actualizare aplicație')}</strong><div class="muted small" id="appver">…</div></div><button class="pill ghost" id="checkupd">${b('Suchen', 'Caută')}</button></div>
+        <div class="item">${b('Automatisch suchen', 'Caută automat')}${seg('autoUpdate', [[true, b('An', 'Da')], [false, b('Aus', 'Nu')]])}</div></div>` : ''}
       <div class="group glass">
         <div class="item"><div><strong>${b('Nutzung heute', 'Utilizare azi')}</strong><div class="muted small" id="usage">…</div></div></div>
         <div class="item"><div><strong>${b('KI-Modelle', 'Modele AI')}</strong><div class="muted small" id="models">…</div></div></div>
@@ -541,6 +563,7 @@ wire.settings = () => {
     };
     el.innerHTML = `${line('Live', r.live)}<br>${line('Text', r.text)}`;
   }).catch(() => { const el = $('#models'); if (el) el.textContent = '—'; });
+  if (updatesEnabled) currentVersion().then((v) => { const el = $('#appver'); if (el) el.textContent = `Vorbi ${v.versionName} (${v.versionCode})`; }).catch(() => {});
   const serverEl = $('#server');
   if (serverEl) serverEl.onchange = () => {
     const v = serverEl.value.trim().replace(/\/+$/, '');
@@ -559,6 +582,7 @@ wire.settings = () => {
       store.setting({ [b.dataset.set]: v === 'true' ? true : v === 'false' ? false : v });
       applyPrefs(); rerender();
     }
+    if (b.id === 'checkupd') runUpdateCheck({ manual: true });
     if (b.id === 'export') {
       const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob([store.exportJson()], { type: 'application/json' })), download: 'vorbi-date.json' });
       a.click();
@@ -568,5 +592,54 @@ wire.settings = () => {
   return () => { app.onclick = null; };
 };
 
+// ---------- app updates (Android, from GitHub Releases) ----------
+function openUpdateSheet(info) {
+  openSheet(`<div class="stack">
+    <div><h2>${b('Update verfügbar', 'Actualizare disponibilă')}</h2><div class="muted">${esc(info.current)} → ${esc(info.latest)}${info.size ? ` · ${(info.size / 1048576).toFixed(1)} MB` : ''}</div></div>
+    ${info.notes ? `<div class="phrase small" style="white-space:pre-wrap;max-height:30dvh;overflow:auto">${esc(info.notes)}</div>` : ''}
+    <div class="meter" id="upbar" hidden><i style="width:0%"></i></div>
+    <div class="muted small" id="upmsg" aria-live="polite"></div>
+    <button class="pill primary" id="upgo">${b('Jetzt installieren', 'Instalează acum')}</button>
+    <button class="pill ghost" data-close>${b('Später', 'Mai târziu')}</button>
+  </div>`, (root) => {
+    let path = null;
+    root.onclick = async (e) => {
+      if (e.target.closest('[data-close]')) return closeSheet();
+      const go = e.target.closest('#upgo');
+      if (!go || go.disabled) return;
+      go.disabled = true;
+      const bar = $('#upbar'), msg = $('#upmsg');
+      try {
+        if (!path) {
+          bar.hidden = false;
+          msg.textContent = bt('Lade herunter …', 'Se descarcă…');
+          ({ path } = await downloadUpdate(info, (p) => { bar.firstElementChild.style.width = `${p}%`; }));
+        }
+        const r = await installUpdate(path);
+        msg.textContent = r.needsPermission
+          ? bt('Erlaube die Installation für Vorbi, dann tippe erneut.', 'Permite instalarea pentru Vorbi, apoi atinge din nou.')
+          : bt('Der Installer von Android öffnet sich.', 'Se deschide instalatorul Android.');
+      } catch {
+        msg.textContent = bt('Update fehlgeschlagen. Versuche es später erneut.', 'Actualizarea a eșuat. Încearcă din nou mai târziu.');
+        path = null;
+      }
+      go.disabled = false;
+    };
+  });
+}
+
+async function runUpdateCheck({ manual = false } = {}) {
+  if (!updatesEnabled) return;
+  try {
+    const info = await checkForUpdate();
+    if (info.available) {
+      if (manual || !/^#\/(talk|translator)/.test(location.hash)) openUpdateSheet(info);
+    } else if (manual) toast(bt('Du hast die neueste Version', 'Ai ultima versiune'));
+  } catch {
+    if (manual) toast(bt('Update-Suche fehlgeschlagen', 'Căutarea a eșuat'));
+  }
+}
+
 window.addEventListener('hashchange', route);
 route();
+playIntro().then(() => { if (store.get().settings.autoUpdate) runUpdateCheck(); });

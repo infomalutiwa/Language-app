@@ -1,5 +1,10 @@
 apply plugin: 'com.android.application'
 
+// One source of truth: package.json "version" -> versionName and versionCode (major*10000 + minor*100 + patch).
+def appVersion = new groovy.json.JsonSlurper().parse(rootProject.file('../package.json')).version
+def vparts = appVersion.tokenize('.-')*.toInteger().take(3)
+def appVersionCode = vparts[0] * 10000 + vparts[1] * 100 + vparts[2]
+
 def keystoreProps = new Properties()
 def keystoreFile = rootProject.file('keystore.properties')
 if (keystoreFile.exists()) { keystoreProps.load(new FileInputStream(keystoreFile)) }
@@ -11,8 +16,8 @@ android {
         applicationId "app.vorbi.german"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "0.1.0"
+        versionCode appVersionCode
+        versionName appVersion
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
