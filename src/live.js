@@ -167,6 +167,7 @@ export class LiveSession {
   // Barge-in: stop playback locally; server-side VAD handles the rest.
   interrupt() { this.flushAudio(); }
   setMuted(v) { this.muted = v; }
+  say(text) { try { this.session.sendRealtimeInput({ text }); } catch {} }
 
   fail(kind) {
     this.finish('error', kind);

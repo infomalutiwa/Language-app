@@ -200,3 +200,19 @@ body[data-view="talk"] .tabbar { transform: translate(-50%, 140%); opacity: 0; p
 .seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
 .toast { position: fixed; left: 50%; top: calc(var(--safe-t) + 16px); transform: translateX(-50%); z-index: 50; border-radius: 999px; padding: 10px 20px; animation: fade 200ms both; max-width: 90vw; text-align: center; }
 .empty { text-align: center; padding: 32px 16px; }
+
+/* Bilingual labels: German large, Romanian small beside/below */
+.bi { display: inline-flex; flex-direction: column; align-items: inherit; line-height: 1.2; text-align: inherit; }
+.bi small { font-size: .74em; font-weight: 400; opacity: .72; letter-spacing: 0; }
+h1 .bi small, h2 .bi small { font-size: .5em; font-family: var(--font-b); margin-top: 2px; }
+.pill .bi { align-items: center; text-align: center; }
+.pill:has(.bi) { padding-block: 6px; }
+.pill.sm:has(.bi) { padding-block: 3px; }
+.tab .bi { align-items: center; }
+.tab .bi small { font-size: 9px; }
+.seg button .bi { align-items: center; }
+body[data-ro="off"] .bi small { display: none; }
+.hints { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 2px 16px; width: calc(100% + 32px); }
+.hints .pill { flex: none; }
+.item .bi { align-items: flex-start; text-align: left; }
+.note { display: block; }

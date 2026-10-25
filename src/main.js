@@ -8,6 +8,9 @@ import { LiveSession } from './live.js';
 const $ = (s, r = document) => r.querySelector(s);
 const app = $('#app');
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+// Bilingual label: German large, Romanian small beside it.
+const b = (de, ro) => `<span class="bi">${de}<small lang="ro">${ro}</small></span>`;
+const bt = (de, ro) => `${de} · ${ro}`;
 const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
 // ---------- theme ----------
@@ -16,16 +19,17 @@ function applyPrefs() {
   const root = document.documentElement;
   theme === 'auto' ? root.removeAttribute('data-theme') : root.setAttribute('data-theme', theme);
   glass === 'reduced' ? root.setAttribute('data-glass', 'reduced') : root.removeAttribute('data-glass');
+  document.body.dataset.ro = store.get().settings.ro ? 'on' : 'off';
   if ((navigator.hardwareConcurrency ?? 8) <= 4) root.setAttribute('data-blur', 'low');
 }
 applyPrefs();
 
 // ---------- tabs ----------
-const TABS = [['home', 'Acasă', 'home'], ['scenarios', 'Scenarii', 'grid'], ['vocab', 'Vocabular', 'book'], ['settings', 'Setări', 'gear']];
+const TABS = [['home', ['Start', 'Acasă'], 'home'], ['scenarios', ['Szenen', 'Scenarii'], 'grid'], ['vocab', ['Wörter', 'Cuvinte'], 'book'], ['settings', ['Optionen', 'Setări'], 'gear']];
 function renderTabs(view) {
   const idx = Math.max(0, TABS.findIndex((t) => t[0] === view));
   $('#tabbar').innerHTML = `<i class="tab-thumb" style="transform:translateX(${idx * 100}%)"></i>` +
-    TABS.map(([id, label, ic]) => `<a class="tab tap" href="#/${id}" ${id === view ? 'aria-current="page"' : ''} aria-label="${label}">${icon(ic)}<span class="lbl">${label}</span></a>`).join('');
+    TABS.map(([id, label, ic]) => `<a class="tab tap" href="#/${id}" ${id === view ? 'aria-current="page"' : ''} aria-label="${bt(...label)}">${icon(ic)}<span class="lbl">${b(...label)}</span></a>`).join('');
 }
 
 // ---------- toast & sheet ----------
@@ -74,41 +78,41 @@ const views = {
     const d = s.daily;
     const due = store.dueWords().length;
     const h = new Date().getHours();
-    const greet = h < 11 ? 'Bună dimineața' : h < 18 ? 'Salut' : 'Bună seara';
+    const greet = h < 11 ? b('Guten Morgen!', 'Bună dimineața!') : h < 18 ? b('Hallo!', 'Salut!') : b('Guten Abend!', 'Bună seara!');
     const last = scenarioById(s.lastScenario) ?? SCENARIOS[0];
     const task = (done, label, href) => `<a class="task tap ${done ? 'done' : ''}" href="${href}"><span class="dot">${done ? icon('check') : ''}</span><span class="t">${label}</span></a>`;
     return `<div class="stack">
-      <div class="hero"><p class="muted" style="margin:0">${greet}!</p><h1>Hai să vorbim<br>germană.</h1></div>
-      <section class="glass card stack" aria-label="Planul de azi">
-        <div class="row between"><h3>Azi</h3><div class="week" title="Ultimele 7 zile">${store.weekDots().map((on) => `<i class="${on ? 'on' : ''}"></i>`).join('')}</div></div>
-        ${task(d.talked, `O conversație: ${last.title}`, `#/talk/${last.id}`)}
-        ${task(d.reviewed, due ? `${due} cuvinte de repetat` : 'Repetă cuvinte (niciunul pentru azi)', '#/vocab')}
-        ${task(d.translated, 'Exercițiu Dolmetscher (5 min)', '#/translator')}
-        <a class="pill primary" href="#/talk/${last.id}">Continuă ${icon('mic')}</a>
+      <div class="hero"><p class="muted" style="margin:0">${greet}</p><h1>${b('Lass uns<br>Deutsch sprechen.', 'Hai să vorbim germană.')}</h1></div>
+      <section class="glass card stack" aria-label="${bt('Heute', 'Azi')}">
+        <div class="row between"><h3>${b('Heute', 'Azi')}</h3><div class="week" title="${bt('Letzte 7 Tage', 'Ultimele 7 zile')}">${store.weekDots().map((on) => `<i class="${on ? 'on' : ''}"></i>`).join('')}</div></div>
+        ${task(d.talked, b(`Gespräch: ${last.t[0]}`, `Conversație: ${last.t[1]}`), `#/talk/${last.id}`)}
+        ${task(d.reviewed, due ? b(`${due} Wörter wiederholen`, `${due} cuvinte de repetat`) : b('Wörter wiederholen (keine fällig)', 'Repetă cuvinte (niciunul)'), '#/vocab')}
+        ${task(d.translated, b('Dolmetscher-Übung (5 Min.)', 'Exercițiu Dolmetscher (5 min)'), '#/translator')}
+        <a class="pill primary" href="#/talk/${last.id}">${b('Weiter', 'Continuă')} ${icon('mic')}</a>
       </section>
       <section class="glass card stack">
-        <div class="row between"><h3>Dolmetscher</h3>${icon('swap')}</div>
-        <p class="muted" style="margin:0">Vorbești românește, aplicația spune în germană. La medic, la primărie, oriunde.</p>
-        <a class="pill ghost" href="#/translator">Deschide</a>
+        <div class="row between"><h3>${b('Dolmetscher', 'Interpret')}</h3>${icon('swap')}</div>
+        <p class="muted" style="margin:0">${b('Du sprichst Rumänisch, die App sagt es auf Deutsch. Beim Arzt, auf dem Amt, überall.', 'Vorbești românește, aplicația spune în germană. La medic, la primărie, oriunde.')}</p>
+        <a class="pill ghost" href="#/translator">${b('Öffnen', 'Deschide')}</a>
       </section>
     </div>`;
   },
 
   scenarios(arg, state = {}) {
     const q = (state.q ?? '').toLowerCase();
-    const lvl = state.lvl ?? 'Toate';
-    const list = SCENARIOS.filter((s) => (lvl === 'Toate' || s.level === lvl) && `${s.title} ${s.desc}`.toLowerCase().includes(q));
+    const lvl = state.lvl ?? 'Alle';
+    const list = SCENARIOS.filter((s) => (lvl === 'Alle' || s.level === lvl) && `${s.t.join(' ')} ${s.d.join(' ')}`.toLowerCase().includes(q));
     const lastId = store.get().lastScenario;
     const card = (s, wide) => `<button class="scn glass tap ${wide ? 'wide' : ''}" style="--h:${s.hue}" data-scn="${s.id}">
-      <span class="ico">${icon(s.icon)}</span><h3>${s.title}</h3><p class="muted small">${s.desc}</p>
+      <span class="ico">${icon(s.icon)}</span><h3>${b(...s.t)}</h3><p class="muted small">${b(...s.d)}</p>
       <span class="meta"><span class="tag">${s.level}</span><span class="tag">${s.min} min</span></span></button>`;
-    const pinned = !q && lvl === 'Toate' && scenarioById(lastId);
+    const pinned = !q && lvl === 'Alle' && scenarioById(lastId);
     return `<div class="stack">
-      <h1>Scenarii</h1>
-      <label class="search glass-2">${icon('search')}<input id="q" type="search" placeholder="Caută o situație" value="${esc(state.q ?? '')}" aria-label="Caută"></label>
-      <div class="filters" role="group" aria-label="Nivel">${['Toate', 'A1', 'A2', 'B1'].map((l) => `<button class="pill ${l === lvl ? 'on' : 'ghost'}" data-lvl="${l}">${l}</button>`).join('')}</div>
+      <h1>${b('Szenen', 'Scenarii')}</h1>
+      <label class="search glass-2">${icon('search')}<input id="q" type="search" placeholder="${bt('Situation suchen', 'Caută o situație')}" value="${esc(state.q ?? '')}" aria-label="${bt('Suchen', 'Caută')}"></label>
+      <div class="filters" role="group" aria-label="${bt('Niveau', 'Nivel')}">${['Alle', 'A1', 'A2', 'B1'].map((l) => `<button class="pill ${l === lvl ? 'on' : 'ghost'}" data-lvl="${l}">${l === 'Alle' ? b('Alle', 'Toate') : l}</button>`).join('')}</div>
       <div class="grid">${pinned ? card(pinned, true) : ''}${list.filter((s) => !pinned || s.id !== pinned.id).map((s) => card(s)).join('')}</div>
-      ${list.length ? '' : '<p class="empty muted">Nu am găsit nimic. Încearcă alt cuvânt.</p>'}
+      ${list.length ? '' : `<p class="empty muted">${b('Nichts gefunden. Versuch ein anderes Wort.', 'Nu am găsit nimic. Încearcă alt cuvânt.')}</p>`}
     </div>`;
   },
 
@@ -118,19 +122,19 @@ const views = {
     const s = store.get().settings;
     return `<div class="talk">
       <div class="talk-head">
-        <a class="pill ghost sm tap" href="#/scenarios" id="leave" aria-label="Înapoi">${icon('back')}</a>
-        <h3>${sc.title}</h3>
+        <a class="pill ghost sm tap" href="#/scenarios" id="leave" aria-label="${bt('Zurück', 'Înapoi')}">${icon('back')}</a>
+        <h3>${b(...sc.t)}</h3>
         <span class="pill glass sm" id="timer">0:00</span>
-        <button class="pill ghost sm" id="ro-toggle" aria-pressed="${s.translate}">DE${s.translate ? '+RO' : ''}</button>
+        <button class="pill ghost sm" id="ro-toggle" aria-pressed="${s.translate}">${s.translate ? 'DE+RO' : 'DE'}</button>
       </div>
       <div class="transcript" id="transcript" aria-live="polite"></div>
       <div class="stage">
-        <div class="state-lbl" id="lbl">Atinge și vorbește</div>
+        <div class="state-lbl" id="lbl">${b(...STATE.idle)}</div>
         ${orbHtml('idle', true)}
+        <div class="hints" id="hints">${HINTS.map(([de, ro], i) => `<button class="pill ghost sm" data-hint="${i}">${b(de, ro)}</button>`).join('')}</div>
         <div class="controls">
-          <button class="pill ghost" id="mute" aria-pressed="false">${icon('mic')}<span>Mut</span></button>
-          <button class="pill ghost" id="slow">${icon('turtle')}<span>Încet</span></button>
-          <button class="pill danger" id="end">${icon('stop')}<span>Închide</span></button>
+          <button class="pill ghost" id="mute" aria-pressed="false">${icon('mic')}${b('Stumm', 'Mut')}</button>
+          <button class="pill danger" id="end">${icon('stop')}${b('Beenden', 'Închide')}</button>
         </div>
       </div>
     </div>`;
@@ -138,17 +142,17 @@ const views = {
 
   translator() {
     return `<div class="stack" style="min-height:calc(100dvh - 140px)">
-      <div class="row between"><h1>Dolmetscher</h1><span class="pill glass sm" id="timer">0:00</span></div>
-      <div class="tr-card glass-2" id="tr-in"><span class="lang">Tu vorbești</span><span class="txt muted">…</span></div>
+      <div class="row between"><h1>${b('Dolmetscher', 'Interpret')}</h1><span class="pill glass sm" id="timer">0:00</span></div>
+      <div class="tr-card glass-2" id="tr-in"><span class="lang">${b('Du sprichst', 'Tu vorbești')}</span><span class="txt muted">…</span></div>
       <div class="row" style="justify-content:center"><span class="pill ghost sm">${icon('swap')} RO ↔ DE</span></div>
-      <div class="tr-card glass-2 de" id="tr-out"><span class="lang">Traducere</span><span class="txt">…</span></div>
+      <div class="tr-card glass-2 de" id="tr-out"><span class="lang">${b('Übersetzung', 'Traducere')}</span><span class="txt">…</span></div>
       <div class="stage" style="margin-top:auto">
-        <div class="state-lbl" id="lbl">Atinge și vorbește</div>
+        <div class="state-lbl" id="lbl">${b(...STATE.idle)}</div>
         ${orbHtml('idle', true)}
         <div class="controls">
-          <button class="pill ghost" id="copy">${icon('copy')}<span>Copiază</span></button>
-          <button class="pill ghost" id="mute">${icon('mic')}<span>Mut</span></button>
-          <button class="pill danger" id="end">${icon('stop')}<span>Închide</span></button>
+          <button class="pill ghost" id="copy">${icon('copy')}${b('Kopieren', 'Copiază')}</button>
+          <button class="pill ghost" id="mute">${icon('mic')}${b('Stumm', 'Mut')}</button>
+          <button class="pill danger" id="end">${icon('stop')}${b('Beenden', 'Închide')}</button>
         </div>
       </div>
     </div>`;
@@ -157,48 +161,64 @@ const views = {
   vocab(arg, st = {}) {
     const due = store.dueWords();
     const total = store.get().vocab.length;
-    if (!total) return `<div class="stack"><h1>Vocabular</h1><div class="glass card empty"><h3>Încă nu ai cuvinte</h3><p class="muted">În timpul unei conversații, atinge un cuvânt german ca să-l salvezi aici.</p><a class="pill primary" href="#/scenarios">Începe o conversație</a></div></div>`;
-    if (!due.length) return `<div class="stack"><h1>Vocabular</h1><div class="glass card empty"><h3>Gata pentru azi 🎉</h3><p class="muted">${total} cuvinte salvate. Revino mai târziu pentru repetare.</p></div></div>`;
+    if (!total) return `<div class="stack"><h1>${b('Wörter', 'Cuvinte')}</h1><div class="glass card empty stack" style="align-items:center"><h3>${b('Noch keine Wörter', 'Încă nu ai cuvinte')}</h3><p class="muted">${b('Tippe im Gespräch auf ein deutsches Wort, um es hier zu speichern.', 'În timpul unei conversații, atinge un cuvânt german ca să-l salvezi aici.')}</p><a class="pill primary" href="#/scenarios">${b('Gespräch starten', 'Începe o conversație')}</a></div></div>`;
+    if (!due.length) return `<div class="stack"><h1>${b('Wörter', 'Cuvinte')}</h1><div class="glass card empty stack" style="align-items:center"><h3>${b('Für heute geschafft 🎉', 'Gata pentru azi 🎉')}</h3><p class="muted">${b(`${total} Wörter gespeichert. Komm später wieder.`, `${total} cuvinte salvate. Revino mai târziu.`)}</p></div></div>`;
     const w = due[0];
     const m = /^(der|die|das)\s+(.+)/i.exec(w.de);
     const front = m ? `<span class="art ${m[1].toLowerCase()}">${m[1].toLowerCase()}</span>${esc(m[2])}` : esc(w.de);
     const flipped = st.flip;
     return `<div class="stack" style="align-items:center">
-      <div class="row between" style="width:100%"><h1>Vocabular</h1><span class="pill glass sm">${st.done ?? 0} / ${(st.done ?? 0) + due.length}</span></div>
-      <button class="flash glass-2 tap" id="flip" aria-label="Întoarce cartea"><div class="stack" style="align-items:center">
+      <div class="row between" style="width:100%"><h1>${b('Wörter', 'Cuvinte')}</h1><span class="pill glass sm">${st.done ?? 0} / ${(st.done ?? 0) + due.length}</span></div>
+      <button class="flash glass-2 tap" id="flip" aria-label="${bt('Karte umdrehen', 'Întoarce cartea')}"><div class="stack" style="align-items:center">
         <div class="word">${front}</div>
-        ${flipped ? `<p class="muted" style="font-size:20px;margin:0">${esc(w.ro || '—')}</p>` : '<p class="muted small" style="margin:0">Atinge pentru traducere</p>'}
+        ${flipped ? `<p class="muted" style="font-size:20px;margin:0">${esc(w.ro || '—')}</p>` : `<p class="muted small" style="margin:0">${b('Tippen für Übersetzung', 'Atinge pentru traducere')}</p>`}
       </div></button>
-      <div class="row"><button class="pill ghost" id="say">${icon('play')} Ascultă</button><button class="pill ghost sm" id="del">Șterge</button></div>
-      ${flipped ? `<div class="answers">${['Din nou', 'Greu', 'Bine', 'Ușor'].map((l, i) => `<button class="pill ghost" data-grade="${i}">${l}</button>`).join('')}</div>` : ''}
+      <div class="row"><button class="pill ghost" id="say">${icon('play')} ${b('Anhören', 'Ascultă')}</button><button class="pill ghost sm" id="del">${b('Löschen', 'Șterge')}</button></div>
+      ${flipped ? `<div class="answers">${[['Nochmal', 'Din nou'], ['Schwer', 'Greu'], ['Gut', 'Bine'], ['Leicht', 'Ușor']].map(([de, ro], i) => `<button class="pill ghost" data-grade="${i}">${b(de, ro)}</button>`).join('')}</div>` : ''}
     </div>`;
   },
 
   settings() {
     const s = store.get().settings;
-    const seg = (key, opts) => `<span class="seg" role="group">${opts.map(([v, l]) => `<button data-set="${key}" data-val="${v}" aria-pressed="${s[key] === v}">${l}</button>`).join('')}</span>`;
+    const seg = (key, opts) => `<span class="seg" role="group">${opts.map(([v, l]) => `<button data-set="${key}" data-val="${v}" aria-pressed="${String(s[key]) === String(v)}">${l}</button>`).join('')}</span>`;
     return `<div class="stack">
-      <h1>Setări</h1>
+      <h1>${b('Optionen', 'Setări')}</h1>
       <div class="group glass">
-        <div class="item"><span>Temă</span>${seg('theme', [['auto', 'Auto'], ['light', 'Luminos'], ['dark', 'Întunecat']])}</div>
-        <div class="item"><span>Sticlă<br><span class="muted small">Redu transparența</span></span>${seg('glass', [['full', 'Plină'], ['reduced', 'Redusă']])}</div>
+        <div class="item">${b('Thema', 'Temă')}${seg('theme', [['auto', 'Auto'], ['light', b('Hell', 'Luminos')], ['dark', b('Dunkel', 'Întunecat')]])}</div>
+        <div class="item">${b('Glas', 'Sticlă')}${seg('glass', [['full', b('Voll', 'Plină')], ['reduced', b('Reduziert', 'Redusă')]])}</div>
+        <div class="item">${b('Rumänisch daneben', 'Română alături')}${seg('ro', [[true, b('An', 'Da')], [false, b('Aus', 'Nu')]])}</div>
       </div>
       <div class="group glass">
-        <div class="item"><span>Nivel</span>${seg('level', [['A1', 'A1'], ['A2', 'A2'], ['B1', 'B1']])}</div>
-        <div class="item"><span>Ajutor în română</span>${seg('help', [['de', 'Nu'], ['mixed', 'Puțin'], ['ro', 'Mult']])}</div>
+        <div class="item">${b('Niveau', 'Nivel')}${seg('level', [['A1', 'A1'], ['A2', 'A2'], ['B1', 'B1']])}</div>
+        <div class="item">${b('Hilfe auf Rumänisch', 'Ajutor în română')}${seg('help', [['de', b('Nein', 'Nu')], ['mixed', b('Wenig', 'Puțin')], ['ro', b('Viel', 'Mult')]])}</div>
       </div>
       <div class="group glass">
-        <div class="item"><div><strong>Utilizare azi</strong><div class="muted small" id="usage">Se încarcă…</div></div></div>
-        <div class="item"><div class="muted small">Conversațiile folosesc Gemini API. Audio-ul este trimis către Google pentru procesare. Limita zilnică este gratuită.</div></div>
+        <div class="item"><div><strong>${b('Nutzung heute', 'Utilizare azi')}</strong><div class="muted small" id="usage">…</div></div></div>
+        <div class="item"><div class="muted small">${b('Gespräche nutzen die Gemini API. Audio wird zur Verarbeitung an Google gesendet. Das Tageslimit ist kostenlos.', 'Conversațiile folosesc Gemini API. Audio-ul este trimis către Google. Limita zilnică este gratuită.')}</div></div>
       </div>
       <div class="group glass">
-        <div class="item"><div><strong>Date pe acest dispozitiv</strong><div class="muted small">Nu există cont. Vocabularul și progresul rămân doar aici.</div></div></div>
-        <div class="item"><button class="pill ghost" id="export">Exportă</button><button class="pill danger" id="wipe">Șterge tot</button></div>
+        <div class="item"><div><strong>${b('Daten auf diesem Gerät', 'Date pe acest dispozitiv')}</strong><div class="muted small">${b('Kein Konto. Wörter und Fortschritt bleiben nur hier.', 'Nu există cont. Totul rămâne doar aici.')}</div></div></div>
+        <div class="item"><button class="pill ghost" id="export">${b('Exportieren', 'Exportă')}</button><button class="pill danger" id="wipe">${b('Alles löschen', 'Șterge tot')}</button></div>
       </div>
-      <p class="muted small" style="text-align:center">Instalare: în Safari, Partajează → Adaugă pe ecranul principal.</p>
+      <p class="muted small" style="text-align:center">${b('Installieren: In Safari Teilen → Zum Home-Bildschirm.', 'Instalare: în Safari, Partajează → Adaugă pe ecranul principal.')}</p>
     </div>`;
   },
 };
+
+const STATE = {
+  idle: ['Tippe und sprich', 'Atinge și vorbește'], connecting: ['Verbinde …', 'Mă conectez…'], thinking: ['Ich denke nach …', 'Mă gândesc…'],
+  listening: ['Ich höre zu …', 'Te ascult…'], speaking: ['Sie spricht …', 'Vorbește…'], ended: ['Gespräch beendet', 'Conversație încheiată'],
+};
+// Quick teaching requests, sent to the tutor as text during a live call.
+const HINTS = [
+  ['Wie sagt man …?', 'Cum se spune…?', 'Ich möchte etwas auf Deutsch sagen und weiß nicht wie. Frag mich, was ich ausdrücken will, sage es mir dann richtig vor und lass es mich nachsprechen.'],
+  ['Erkläre das', 'Explică', 'Erkläre mir bitte deinen letzten Satz einfach, mit rumänischer Übersetzung der wichtigen Wörter.'],
+  ['Aussprache', 'Pronunție', 'Sprich das letzte wichtige Wort langsam in Silben vor, lass mich es nachsprechen und gib mir ehrliches, freundliches Feedback zu meiner Aussprache.'],
+  ['Anders sagen', 'Altfel', 'Wie kann man das, was ich zuletzt gesagt habe, natürlicher oder höflicher sagen? Gib mir zwei Alternativen und lass mich eine nachsprechen.'],
+  ['Wiederholen', 'Repetă', 'Bitte wiederhole deinen letzten Satz.'],
+  ['Langsamer', 'Mai rar', 'Sprich bitte langsamer und einfacher.'],
+  ['Zusammenfassung', 'Rezumat', 'Fasse unser Gespräch kurz zusammen: Was war gut, die zwei wichtigsten Fehler und drei neue Sätze zum Merken.'],
+];
 
 // ---------- view wiring ----------
 let current = { view: '', cleanup: null };
@@ -245,21 +265,18 @@ wire.scenarios = () => {
 function openScenarioSheet(id) {
   const sc = scenarioById(id);
   openSheet(`<div class="stack">
-    <div class="row"><span class="scn ico" style="min-height:0;padding:0;width:48px;height:48px;border-radius:999px;display:grid;place-items:center" >${icon(sc.icon)}</span><div><h2>${sc.title}</h2><span class="muted small">${sc.desc}</span></div></div>
+    <div class="row"><span class="scn ico" style="min-height:0;padding:0;width:48px;height:48px;border-radius:999px;display:grid;place-items:center" >${icon(sc.icon)}</span><div><h2>${b(...sc.t)}</h2><span class="muted small">${b(...sc.d)}</span></div></div>
     <div class="row"><span class="tag">${sc.level}</span><span class="tag">~${sc.min} min</span></div>
-    <div class="stack" style="gap:8px">${sc.starters.map(([de, ro]) => `<div class="phrase"><div class="de">${esc(de)}</div><div class="muted small">${esc(ro)}</div></div>`).join('')}</div>
-    <a class="pill primary" href="#/talk/${sc.id}">Începe conversația</a>
+    <div class="stack" style="gap:8px">${sc.starters.map(([de, ro]) => `<div class="phrase"><div class="de">${esc(de)}</div><div class="muted small" lang="ro">${esc(ro)}</div></div>`).join('')}</div>
+    <a class="pill primary" href="#/talk/${sc.id}">${b('Gespräch starten', 'Începe conversația')}</a>
   </div>`);
 }
 
-const SPEAK_HINT = {
-  idle: 'Atinge și vorbește', connecting: 'Mă conectez…', thinking: 'Mă gândesc…', listening: 'Te ascult…', speaking: 'Vorbește…', error: '',
-};
 const ERR = {
-  mic: 'Nu aud microfonul. Permite accesul în setările browserului.',
-  limit: 'Ai folosit limita de azi. Revino mâine.',
-  server: 'Serverul nu este configurat încă.',
-  network: 'Conexiunea a căzut. Verifică internetul.',
+  mic: ['Ich höre dein Mikrofon nicht. Erlaube den Zugriff in den Browser-Einstellungen.', 'Nu aud microfonul. Permite accesul în setările browserului.'],
+  limit: ['Das Tageslimit ist erreicht. Komm morgen wieder.', 'Ai folosit limita de azi. Revino mâine.'],
+  server: ['Der Server ist noch nicht eingerichtet.', 'Serverul nu este configurat încă.'],
+  network: ['Verbindung unterbrochen. Prüfe dein Internet.', 'Conexiunea a căzut. Verifică internetul.'],
 };
 
 // Shared live-session driver for talk + translator.
@@ -268,7 +285,7 @@ function runLive(scenario, ui) {
   let timer;
   let state = 'idle';
   const lbl = $('#lbl');
-  const setLbl = (t) => { if (lbl) lbl.textContent = t; };
+  const setLbl = (pair) => { if (lbl) lbl.innerHTML = b(...pair); };
   const tick = () => { const t = $('#timer'); if (t && session?.startedAt) t.textContent = mmss((Date.now() - session.startedAt) / 1000); };
 
   const begin = async () => {
@@ -280,26 +297,26 @@ function runLive(scenario, ui) {
           clearInterval(timer);
           const kind = detail?.kind;
           setOrb(s === 'error' ? 'error' : 'off');
-          setLbl(s === 'error' ? ERR[kind] ?? ERR.network : kind === 'limit' ? ERR.limit : 'Conversație încheiată');
+          setLbl(s === 'error' ? ERR[kind] ?? ERR.network : kind === 'limit' ? ERR.limit : STATE.ended);
           if (detail?.usedSec > 20) ui.onDone?.(detail.usedSec);
           if (s === 'error') showRetry(); else session = null;
           return;
         }
         setOrb(s);
-        setLbl(SPEAK_HINT[s] ?? '');
+        setLbl(STATE[s] ?? STATE.idle);
       },
       onText: ui.onText,
       onLevel: (l) => { if (state === 'listening' || state === 'speaking') setOrb(state, l); },
     });
     timer = setInterval(tick, 500);
     setOrb('thinking');
-    setLbl(SPEAK_HINT.connecting);
+    setLbl(STATE.connecting);
     await session.start(scenario);
   };
   const showRetry = () => {
     session = null;
     const c = $('.controls');
-    if (c && !$('#retry')) c.insertAdjacentHTML('afterbegin', `<button class="pill ghost" id="retry">${icon('refresh')}<span>Reîncearcă</span></button>`);
+    if (c && !$('#retry')) c.insertAdjacentHTML('afterbegin', `<button class="pill ghost" id="retry">${icon('refresh')}${b('Nochmal', 'Reîncearcă')}</button>`);
   };
 
   $('#orb-btn').onclick = () => {
@@ -308,21 +325,22 @@ function runLive(scenario, ui) {
   };
   app.addEventListener('click', onClick);
   function onClick(e) {
-    const b = e.target.closest('button');
-    if (!b) return;
-    if (b.id === 'retry') { b.remove(); begin(); }
-    if (b.id === 'mute' && session) {
-      const m = b.getAttribute('aria-pressed') !== 'true';
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    if (btn.id === 'retry') { btn.remove(); begin(); }
+    if (btn.id === 'mute' && session) {
+      const m = btn.getAttribute('aria-pressed') !== 'true';
       session.setMuted(m);
-      b.setAttribute('aria-pressed', m);
-      b.innerHTML = `${icon(m ? 'micoff' : 'mic')}<span>${m ? 'Mut activ' : 'Mut'}</span>`;
+      btn.setAttribute('aria-pressed', m);
+      btn.innerHTML = `${icon(m ? 'micoff' : 'mic')}${m ? b('Stumm an', 'Mut activ') : b('Stumm', 'Mut')}`;
       navigator.vibrate?.(15);
     }
-    if (b.id === 'slow' && session) {
-      try { session.session.sendRealtimeInput({ text: 'Sprich bitte langsamer und einfacher.' }); } catch {}
-      toast('Vorbesc mai rar');
+    const hint = btn.closest('[data-hint]');
+    if (hint && session) {
+      session.say(HINTS[hint.dataset.hint][2]);
+      toast(bt(HINTS[hint.dataset.hint][0], HINTS[hint.dataset.hint][1]));
     }
-    if (b.id === 'end') { session ? session.stop() : (location.hash = '#/home'); }
+    if (btn.id === 'end') { session ? session.stop() : (location.hash = '#/home'); }
   }
   return () => {
     clearInterval(timer);
@@ -361,7 +379,7 @@ wire.talk = (id) => {
     if (w) {
       const word = w.textContent;
       const ok = store.addWord(word, '');
-      toast(ok ? `„${word}” salvat` : 'Deja salvat');
+      toast(ok ? bt(`„${word}“ gespeichert`, 'salvat') : bt('Schon gespeichert', 'Deja salvat'));
       if (ok) api.translate(word).then((r) => { const v = store.get().vocab.find((x) => x.de === word); if (v) { v.ro = r.ro; store.set({}); } }).catch(() => {});
     }
     const ro = e.target.closest('[data-ro]');
@@ -369,7 +387,7 @@ wire.talk = (id) => {
       const bub = ro.closest('.bub');
       if (bub.querySelector('.ro')) return bub.querySelector('.ro').remove();
       bub.insertAdjacentHTML('beforeend', '<div class="ro muted">…</div>');
-      try { bub.querySelector('.ro').textContent = (await api.translate(bub.dataset.text)).ro; } catch { bub.querySelector('.ro').textContent = 'Traducerea nu este disponibilă acum.'; }
+      try { bub.querySelector('.ro').textContent = (await api.translate(bub.dataset.text)).ro; } catch { bub.querySelector('.ro').textContent = 'Übersetzung gerade nicht verfügbar · Traducerea nu este disponibilă'; }
     }
   };
   box.addEventListener('click', onBoxClick);
@@ -397,7 +415,7 @@ wire.translator = () => {
     }
     lastRole = role;
   };
-  const onCopy = (e) => { if (e.target.closest('#copy')) navigator.clipboard?.writeText(outBuf).then(() => toast('Copiat')).catch(() => {}); };
+  const onCopy = (e) => { if (e.target.closest('#copy')) navigator.clipboard?.writeText(outBuf).then(() => toast(bt('Kopiert', 'Copiat'))).catch(() => {}); };
   app.addEventListener('click', onCopy);
   const stop = runLive('translator', { onText, onDone: () => store.daily({ translated: true }) });
   return () => { stop(); app.removeEventListener('click', onCopy); };
@@ -425,16 +443,20 @@ wire.vocab = () => {
 };
 
 wire.settings = () => {
-  api.usage().then((r) => { const el = $('#usage'); if (el) el.textContent = `${mmss(r.remainingSec)} min rămase astăzi`; }).catch(() => { const el = $('#usage'); if (el) el.textContent = 'Indisponibil momentan'; });
+  api.usage().then((r) => { const el = $('#usage'); if (el) el.textContent = `${mmss(r.remainingSec)} min übrig heute · rămase astăzi`; }).catch(() => { const el = $('#usage'); if (el) el.textContent = 'Gerade nicht verfügbar · Indisponibil'; });
   app.onclick = (e) => {
     const b = e.target.closest('button');
     if (!b) return;
-    if (b.dataset.set) { store.setting({ [b.dataset.set]: b.dataset.val }); applyPrefs(); rerender(); }
+    if (b.dataset.set) {
+      const v = b.dataset.val;
+      store.setting({ [b.dataset.set]: v === 'true' ? true : v === 'false' ? false : v });
+      applyPrefs(); rerender();
+    }
     if (b.id === 'export') {
       const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob([store.exportJson()], { type: 'application/json' })), download: 'vorbi-date.json' });
       a.click();
     }
-    if (b.id === 'wipe' && confirm('Ștergi tot vocabularul și progresul de pe acest dispozitiv?')) { store.wipe(); applyPrefs(); route(); toast('Date șterse'); }
+    if (b.id === 'wipe' && confirm(bt('Alle Wörter und den Fortschritt auf diesem Gerät löschen?', 'Ștergi tot vocabularul și progresul?'))) { store.wipe(); applyPrefs(); route(); toast(bt('Daten gelöscht', 'Date șterse')); }
   };
   return () => { app.onclick = null; };
 };
