@@ -2,6 +2,7 @@ import './style.css';
 import { icon } from './icons.js';
 import { store } from './store.js';
 import { api, apiBase } from './api.js';
+import { isDirect, validKey, testKey } from './direct.js';
 import { SCENARIOS, scenarioById } from './data.js';
 import { PACKS, packById, TOTAL_WORDS } from './words.js';
 import { esc, b, bt, mmss, isNative } from './ui.js';
@@ -93,11 +94,12 @@ const views = {
     const ring = `<svg class="ring" viewBox="0 0 110 110" role="img" aria-label="${doneN} / ${goals.length}">
       <circle cx="55" cy="55" r="${R}" class="ring-bg"/><circle cx="55" cy="55" r="${R}" class="ring-fg" stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - doneN / goals.length)}" transform="rotate(-90 55 55)"/>
       <text x="55" y="53" text-anchor="middle" class="ring-n">${doneN}/${goals.length}</text><text x="55" y="72" text-anchor="middle" class="ring-l">${bt('Ziele', 'ținte')}</text></svg>`;
+    const needsSetup = !isDirect() && (isNative ? !apiBase() : import.meta.env.VITE_NO_SERVER === '1');
     const streak = store.streak();
     const stat = (n, de, ro) => `<div class="stat glass"><strong>${n}</strong><span>${b(de, ro)}</span></div>`;
     const act = (href, ic, de, ro, hue) => `<a class="act glass tap" href="${href}" style="--h:${hue}"><span class="ico">${icon(ic)}</span><span class="t">${b(de, ro)}</span></a>`;
     return `<div class="stack dash">
-      ${isNative && !apiBase() ? `<a class="glass card tap" href="#/settings" style="display:block;border-color:var(--err)"><strong>${b('Server-Adresse fehlt', 'Lipsește adresa serverului')}</strong><div class="muted small">${b('Trage in den Optionen die Adresse deines Vorbi-Servers ein.', 'Introdu în Setări adresa serverului tău Vorbi.')}</div></a>` : ''}
+      ${needsSetup ? `<a class="glass card tap" href="#/settings" style="display:block;border-color:var(--accent)"><strong>${b('Fast fertig: Gemini-Key eintragen', 'Aproape gata: introdu cheia Gemini')}</strong><div class="muted small">${b('Kostenlos und ohne Server: Key auf aistudio.google.com/apikey holen und in den Optionen einfügen.', 'Gratuit și fără server: ia cheia de pe aistudio.google.com/apikey și lipește-o în Setări.')}</div></a>` : ''}
       <div class="row between dash-top">
         <div><p class="muted" style="margin:0">${greet}</p><h1>${b('Dein Tag', 'Ziua ta')}</h1></div>
         <div class="stack" style="gap:6px;align-items:flex-end"><span class="pill glass sm">${s.settings.level}</span><span class="pill glass sm" title="${bt('Serie', 'Serie')}">${icon('refresh')} ${b(`${streak} ${streak === 1 ? 'Tag' : 'Tage'}`, `${streak} ${streak === 1 ? 'zi' : 'zile'}`)}</span></div>
@@ -238,6 +240,9 @@ const views = {
         <div class="item">${b('Stimme', 'Voce')}<select class="pill ghost sel" id="voice" aria-label="${bt('Stimme', 'Voce')}">${VOICES.map((v) => `<option value="${v}" ${s.voice === v ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
         <div class="item">${b('Hilfe auf Rumänisch', 'Ajutor în română')}${seg('help', [['de', b('Nein', 'Nu')], ['mixed', b('Wenig', 'Puțin')], ['ro', b('Viel', 'Mult')]])}</div>
       </div>
+      <div class="group glass"><div class="item" style="flex-wrap:wrap;gap:10px"><div><strong>${b('Eigener Gemini-Key', 'Cheie Gemini proprie')}</strong><div class="muted small">${b('Kostenlos, ohne Server. Der Key bleibt nur auf diesem Gerät.', 'Gratuit, fără server. Cheia rămâne doar pe acest dispozitiv.')}</div></div>
+        <input id="gkey" type="password" class="glass-2 free-box" style="padding:10px 14px;font-size:16px" autocomplete="off" autocapitalize="off" spellcheck="false" value="${esc(s.geminiKey || '')}" placeholder="AIza…">
+        <div class="row"><a class="pill ghost sm" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">${b('Key holen', 'Ia cheia')}</a><button class="pill ghost sm" id="gtest">${b('Testen', 'Testează')}</button></div></div></div>
       ${isNative ? `<div class="group glass"><div class="item" style="flex-wrap:wrap"><div><strong>${b('Server-Adresse', 'Adresa serverului')}</strong><div class="muted small">https://…</div></div><input id="server" class="glass-2 free-box" style="padding:10px 14px;font-size:16px" inputmode="url" autocapitalize="off" autocomplete="off" value="${esc(s.server || apiBase())}" placeholder="https://vorbi.example.com"></div></div>` : ''}
       ${updatesEnabled ? `<div class="group glass">
         <div class="item"><div><strong>${b('App-Update', 'Actualizare aplicație')}</strong><div class="muted small" id="appver">…</div></div><button class="pill ghost" id="checkupd">${b('Suchen', 'Caută')}</button></div>
@@ -552,7 +557,7 @@ wire.packs = () => {
 };
 
 wire.settings = () => {
-  api.usage().then((r) => { const el = $('#usage'); if (el) el.textContent = `${mmss(r.remainingSec)} min übrig heute · rămase astăzi`; }).catch(() => { const el = $('#usage'); if (el) el.textContent = 'Gerade nicht verfügbar · Indisponibil'; });
+  api.usage().then((r) => { const el = $('#usage'); if (el) el.textContent = r.remainingSec == null ? 'Eigener Key: kein App-Limit · fără limită în aplicație' : `${mmss(r.remainingSec)} min übrig heute · rămase astăzi`; }).catch(() => { const el = $('#usage'); if (el) el.textContent = 'Gerade nicht verfügbar · Indisponibil'; });
   api.status().then((r) => {
     const el = $('#models');
     if (!el) return;
@@ -564,13 +569,21 @@ wire.settings = () => {
     el.innerHTML = `${line('Live', r.live)}<br>${line('Text', r.text)}`;
   }).catch(() => { const el = $('#models'); if (el) el.textContent = '—'; });
   if (updatesEnabled) currentVersion().then((v) => { const el = $('#appver'); if (el) el.textContent = `Vorbi ${v.versionName} (${v.versionCode})`; }).catch(() => {});
+  const keyEl = $('#gkey');
+  if (keyEl) keyEl.onchange = () => {
+    const v = keyEl.value.trim();
+    if (v && !validKey(v)) return toast(bt('Das sieht nicht wie ein Gemini-Key aus', 'Nu pare o cheie Gemini'));
+    store.setting({ geminiKey: v });
+    toast(bt(v ? 'Key gespeichert' : 'Key entfernt', v ? 'Cheie salvată' : 'Cheie ștearsă'));
+    rerender();
+  };
   const serverEl = $('#server');
   if (serverEl) serverEl.onchange = () => {
     const v = serverEl.value.trim().replace(/\/+$/, '');
     if (v && !/^https:\/\/[^\s/]+/.test(v)) return toast(bt('Nur https://-Adressen', 'Doar adrese https://'));
     store.setting({ server: v });
     toast(bt('Gespeichert', 'Salvat'));
-    api.usage().then((r) => { const el = $('#usage'); if (el) el.textContent = `${mmss(r.remainingSec)} min`; }).catch(() => toast(bt('Server nicht erreichbar', 'Serverul nu răspunde')));
+    api.usage().then((r) => { const el = $('#usage'); if (el) el.textContent = r.remainingSec == null ? '∞' : `${mmss(r.remainingSec)} min`; }).catch(() => toast(bt('Server nicht erreichbar', 'Serverul nu răspunde')));
   };
   const voiceEl = $('#voice');
   if (voiceEl) voiceEl.onchange = () => store.setting({ voice: voiceEl.value });
@@ -581,6 +594,10 @@ wire.settings = () => {
       const v = b.dataset.val;
       store.setting({ [b.dataset.set]: v === 'true' ? true : v === 'false' ? false : v });
       applyPrefs(); rerender();
+    }
+    if (b.id === 'gtest') {
+      b.disabled = true;
+      testKey().then(() => toast(bt('Key funktioniert ✓', 'Cheia funcționează ✓'))).catch(() => toast(bt('Key abgelehnt oder keine Verbindung', 'Cheie respinsă sau fără conexiune'))).finally(() => { b.disabled = false; });
     }
     if (b.id === 'checkupd') runUpdateCheck({ manual: true });
     if (b.id === 'export') {

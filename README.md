@@ -49,3 +49,10 @@ Branch wählen → `GEMINI_API_KEY` einfügen. HTTPS ist automatisch, `render.ya
 Cloud Run: `gcloud run deploy vorbi --source . --allow-unauthenticated --set-env-vars TRUST_PROXY=1 --set-secrets GEMINI_API_KEY=...`.
 Danach die APK mit `VITE_API_BASE=https://deine-adresse npm run android` neu bauen (oder die Adresse in den App-Optionen eintragen).
 Tageslimits liegen in `server/.usage.json` im Container und werden bei einem Neustart zurückgesetzt.
+
+## Kostenlos ohne Server (Eigener Key)
+
+Die App läuft auch ganz ohne Server: In den Optionen einen kostenlosen Gemini-Key (aistudio.google.com/apikey) eintragen.
+Dann sprechen App und Gemini direkt miteinander, der Key bleibt nur auf dem Gerät. Modellwahl und Wechsel bei leerem
+Kontingent laufen wie auf dem Server (gleicher Code in `server/models.js`). Für ein statisches Hosting (z. B. Firebase
+Hosting im kostenlosen Tarif): `VITE_NO_SERVER=1 npx vite build` und `dist/` ausliefern.

@@ -81,7 +81,7 @@ export class LiveSession {
         tok = await api.token(scenario, { retryOf, msg, exclude: tried });
       } catch (e) {
         await this.teardown();
-        return this.fail(e.code === 'daily_limit' ? 'limit' : e.code === 'server_not_configured' ? 'server' : 'network');
+        return this.fail(e.code === 'daily_limit' ? 'limit' : e.code === 'server_not_configured' ? 'server' : e.code === 'no_model_available' ? 'network' : 'network');
       }
       this.sessionId = tok.sessionId;
       this.reserved = tok.reservedSec;
@@ -130,10 +130,11 @@ export class LiveSession {
       let ready = false;
       const bail = (e) => { if (!ready) { clearTimeout(timer); reject(e); } };
       const timer = setTimeout(() => bail(new Error('timeout')), 8000);
-      const ai = new GoogleGenAI({ apiKey: tok.token, httpOptions: { apiVersion: 'v1alpha' } });
+      // Server tokens are ephemeral (v1alpha, config locked in the token); an own key sends the full config itself.
+      const ai = new GoogleGenAI(tok.direct ? { apiKey: tok.token } : { apiKey: tok.token, httpOptions: { apiVersion: 'v1alpha' } });
       ai.live.connect({
         model: tok.model,
-        config: { responseModalities: [Modality.AUDIO] },
+        config: tok.direct ? tok.config : { responseModalities: [Modality.AUDIO] },
         callbacks: {
           onmessage: (m) => { if (!ready) { ready = true; clearTimeout(timer); resolve(); } this.onMessage(m); },
           onerror: (e) => (ready ? this.fail('network') : bail(new Error(e?.message ?? 'error'))),

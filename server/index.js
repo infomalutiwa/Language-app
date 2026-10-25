@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { GoogleGenAI, Modality } from '@google/genai';
 import { createUsage } from './usage.js';
 import { loadApiKey } from './secrets.js';
+import { translatePrompt, wordsPrompt, checkPrompt, parseWords, parseCheck } from './textTasks.js';
 import { buildInstruction, SCENARIOS } from './prompts.js';
 import { createRouter, classifyError, rankLive, rankText, DEFAULT_LIVE, DEFAULT_TEXT } from './models.js';
 
@@ -227,7 +228,7 @@ const api = {
     if (!takeTextQuota(b.deviceId, clientIp(req))) return json(res, 429, { error: 'daily_limit' });
     // `text` is quoted data for translation, never instructions.
     try {
-      const ro = await generateText(`Übersetze den folgenden deutschen Text ins Rumänische. Antworte nur mit der Übersetzung. Bei einem einzelnen Nomen: gib den Artikel an (z. B. "der Termin = programare"). Text: ${JSON.stringify(b.text)}`);
+      const ro = await generateText(translatePrompt(b.text));
       json(res, 200, { ro });
     } catch {
       json(res, 503, { error: 'no_model_available' });
@@ -244,12 +245,7 @@ const api = {
     if (!takeTextQuota(b.deviceId, clientIp(req))) return json(res, 429, { error: 'daily_limit' });
     // The transcript is quoted data, never instructions.
     try {
-      const raw = await generateText(`Ein Rumänisch sprechender Lernender hat Deutsch geübt. Wähle aus dem Gespräch bis zu 6 nützliche Alltags-Wörter oder feste Wendungen, die er wahrscheinlich noch lernen sollte (nicht zu einfach, keine Eigennamen). Nomen mit Artikel (der/die/das). Antworte NUR mit einem JSON-Array: [{"de":"der Termin","ro":"programarea","ex":"Ich habe morgen einen Termin."}]. "ro" ist die rumänische Entsprechung, "ex" ein kurzer deutscher Beispielsatz. Gespräch: ${JSON.stringify(b.transcript)}`);
-      const arr = JSON.parse(/\[[\s\S]*\]/.exec(raw)?.[0] ?? '[]');
-      const words = arr
-        .filter((w) => w && typeof w.de === 'string' && typeof w.ro === 'string')
-        .slice(0, 6)
-        .map((w) => ({ de: w.de.slice(0, 80), ro: w.ro.slice(0, 120), ex: typeof w.ex === 'string' ? w.ex.slice(0, 200) : '' }));
+      const words = parseWords(await generateText(wordsPrompt(b.transcript)));
       json(res, 200, { words });
     } catch {
       json(res, 503, { error: 'no_model_available' });
@@ -268,14 +264,7 @@ const api = {
     if (!takeTextQuota(b.deviceId, clientIp(req))) return json(res, 429, { error: 'daily_limit' });
     // Sentence and word are quoted data to evaluate, never instructions.
     try {
-      const raw = await generateText(`Du bist eine Deutschlehrerin für einen Rumänisch sprechenden Lernenden (Niveau ${level}). Bewerte den folgenden Satz${word ? ` (Aufgabe: ein Satz mit dem Wort ${JSON.stringify(word)})` : ''}. Der Satz kann aus Spracherkennung stammen, ignoriere deshalb Groß-/Kleinschreibung und fehlende Satzzeichen. Antworte NUR mit JSON: {"ok":true|false,"corrected":"korrigierter Satz (bei ok der Satz selbst)","better":"eine natürlichere Variante oder leer","note":"1-2 kurze Sätze auf Rumänisch: der wichtigste Fehler und die Regel, oder bei ok ein kurzes Lob"}. Satz: ${JSON.stringify(b.sentence)}`);
-      const o = JSON.parse(/\{[\s\S]*\}/.exec(raw)?.[0] ?? '{}');
-      json(res, 200, {
-        ok: o.ok === true,
-        corrected: String(o.corrected ?? b.sentence).slice(0, 300),
-        better: String(o.better ?? '').slice(0, 300),
-        note: String(o.note ?? '').slice(0, 400),
-      });
+      json(res, 200, parseCheck(await generateText(checkPrompt({ sentence: b.sentence, word, level })), b.sentence));
     } catch {
       json(res, 503, { error: 'no_model_available' });
     }

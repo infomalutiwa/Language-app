@@ -8,7 +8,7 @@ const uuid = () => (crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toSt
 
 const defaults = () => ({
   deviceId: uuid(),
-  settings: { theme: 'auto', glass: 'full', level: 'A2', help: 'mixed', translate: true, ro: true, voice: 'Kore', server: '', autoUpdate: true },
+  settings: { theme: 'auto', glass: 'full', level: 'A2', help: 'mixed', translate: true, ro: true, voice: 'Kore', server: '', geminiKey: '', autoUpdate: true },
   vocab: [],
   daily: { date: todayStr(), talked: false, reviewed: false, translated: false, sec: 0, newWords: 0 },
   history: [],
@@ -98,5 +98,5 @@ export const store = {
   removeWord(de) { state.vocab = state.vocab.filter((x) => x.de !== de); save(); },
   exportJson: () => JSON.stringify(state, null, 2),
   // Wiping learning data keeps the device id (usage limits are tied to it) and the server address.
-  wipe() { const keep = { deviceId: state.deviceId, server: state.settings.server }; state = defaults(); state.deviceId = keep.deviceId; state.settings.server = keep.server; save(); },
+  wipe() { const keep = { deviceId: state.deviceId, server: state.settings.server, geminiKey: state.settings.geminiKey }; state = defaults(); state.deviceId = keep.deviceId; state.settings.server = keep.server; state.settings.geminiKey = keep.geminiKey; save(); },
 };
