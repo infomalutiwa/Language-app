@@ -28,13 +28,21 @@ applyPrefs();
 
 // ---------- tabs ----------
 const TABS = [['home', ['Start', 'Acasă'], 'home'], ['scenarios', ['Sprechen', 'Vorbește'], 'chat'], ['translator', ['Dolmetscher', 'Interpret'], 'swap'], ['learn', ['Lernen', 'Învață'], 'book'], ['settings', ['Optionen', 'Setări'], 'gear']];
-const LEARN_VIEWS = ['sentences', 'vocab', 'packs'];
+const LEARN_VIEWS = ['sentences', 'vocab', 'packs', 'progress'];
 function renderTabs(view) {
   const tab = LEARN_VIEWS.includes(view) ? 'learn' : view === 'talk' ? 'scenarios' : view;
   view = tab;
   const idx = Math.max(0, TABS.findIndex((t) => t[0] === view));
   $('#tabbar').innerHTML = `<i class="tab-thumb" style="transform:translateX(${idx * 100}%)"></i>` +
     TABS.map(([id, label, ic]) => `<a class="tab tap" href="#/${id}" ${id === view ? 'aria-current="page"' : ''} aria-label="${bt(...label)}">${icon(ic)}<span class="lbl">${b(...label)}</span></a>`).join('');
+}
+
+// Did the user really learn that day, or only use the interpreter?
+function learnVerdict(d) {
+  const acts = d.review + d.words + d.sentences;
+  if (d.talk >= 120 || acts > 0) return { k: 'ok', icon: '✅', sub: bt('Heute gelernt', 'Azi ai învățat'), de: 'Heute wirklich gelernt', ro: 'Azi ai învățat cu adevărat', dd: 'Du hast mit der Lehrerin gesprochen oder Wörter und Sätze geübt.', dr: 'Ai vorbit cu profesoara sau ai exersat cuvinte și propoziții.' };
+  if (d.translate > 0) return { k: 'tr', icon: '🔁', sub: bt('Nur Übersetzer benutzt', 'Doar interpret'), de: 'Nur den Übersetzer benutzt', ro: 'Doar interpretul a fost folosit', dd: 'Heute wurde nur übersetzt, nicht gelernt.', dr: 'Azi s-a tradus doar, nu s-a învățat.' };
+  return { k: 'no', icon: '⏳', sub: bt('Heute noch nichts', 'Azi încă nimic'), de: 'Heute noch nicht gelernt', ro: 'Azi încă nu ai învățat', dd: 'Starte ein Gespräch oder übe ein paar Wörter.', dr: 'Începe o conversație sau exersează câteva cuvinte.' };
 }
 
 // ---------- toast & sheet ----------
@@ -172,9 +180,42 @@ const views = {
       <div class="stack">
         ${card('#/sentences', 'mic', 'Sätze bilden', 'Formează propoziții', bt(`Heute ${Math.min(d.sentences ?? 0, 3)}/3`, `Azi ${Math.min(d.sentences ?? 0, 3)}/3`), 'c-de')}
         ${card('#/vocab', 'refresh', 'Wiederholen', 'Repetă', due ? bt(`${due} Wörter fällig`, `${due} cuvinte de repetat`) : bt('Alles erledigt', 'Totul făcut'), 'c-ro')}
+        ${card('#/progress', 'pulse', 'Nachweis', 'Dovadă', learnVerdict(store.activity(1)[0]).sub, 'c-ro')}
         ${card('#/packs', 'book', 'Wortpakete', 'Pachete de cuvinte', bt(`${PACKS.length} Pakete · ${TOTAL_WORDS} Wörter`, `${PACKS.length} pachete · ${TOTAL_WORDS} cuvinte`), 'c-de')}
       </div>
       <p class="muted small" style="margin:0">${bt(`${s.vocab.length} Wörter gespeichert`, `${s.vocab.length} cuvinte salvate`)}</p>
+    </div>`;
+  },
+
+  progress() {
+    const days = store.activity(14);
+    const today = days[days.length - 1];
+    const v = learnVerdict(today);
+    const min = (s) => Math.round(s / 60);
+    const fmt = (s) => (s >= 3600 ? `${Math.floor(s / 3600)} h ${min(s % 3600)} min` : `${min(s)} min`);
+    const tot = days.reduce((a, d) => ({ talk: a.talk + d.talk, translate: a.translate + d.translate, act: a.act + d.review + d.words + d.sentences }), { talk: 0, translate: 0, act: 0 });
+    const stat = (n, de, ro) => `<div class="glass card stat"><strong>${n}</strong><span class="muted small">${b(de, ro)}</span></div>`;
+    const wd = (d) => new Date(d + 'T12:00').toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'numeric' });
+    const rows = [...days].reverse().map((d) => {
+      const vv = learnVerdict(d);
+      return `<div class="prow"><span>${wd(d.day)}</span><span>${d.talk ? min(d.talk) + ' min' : '–'}</span><span>${d.translate ? min(d.translate) + ' min' : '–'}</span><span>${d.review + d.words + d.sentences || '–'}</span><span class="v v-${vv.k}">${vv.icon}</span></div>`;
+    }).join('');
+    return `<div class="stack">
+      <div class="row between"><h1>${b('Nachweis', 'Dovadă')}</h1><a class="pill ghost sm" href="#/learn">${icon('back')}</a></div>
+      <div class="glass card verdict v-${v.k}"><h2>${v.icon} ${b(v.de, v.ro)}</h2><p class="muted">${b(v.dd, v.dr)}</p></div>
+      <div class="stats">
+        ${stat(fmt(today.talk), 'Gespräch heute', 'Conversație azi')}
+        ${stat(fmt(today.translate), 'Übersetzer heute', 'Interpret azi')}
+        ${stat(today.review + today.words + today.sentences, 'Übungen heute', 'Exerciții azi')}
+        ${stat(fmt(tot.talk), 'Lernzeit, 14 Tage', 'Timp de învățat, 14 zile')}
+        ${stat(fmt(tot.translate), 'Übersetzer, 14 Tage', 'Interpret, 14 zile')}
+        ${stat(tot.act, 'Übungen, 14 Tage', 'Exerciții, 14 zile')}
+      </div>
+      <div class="glass card ptable">
+        <div class="prow head"><span>${b('Tag', 'Zi')}</span><span>${b('Lehrerin', 'Profa')}</span><span>${b('Übers.', 'Interp.')}</span><span>${b('Übungen', 'Exerc.')}</span><span></span></div>
+        ${rows}
+      </div>
+      <p class="muted small">${b('Gelernt = Gespräch mit der Lehrerin (ab 2 Min.) oder Wörter/Sätze geübt. Der Übersetzer zählt nicht als Lernen.', 'Învățat = conversație cu profesoara (min. 2 min) sau cuvinte/propoziții exersate. Interpretul nu contează ca învățare.')}</p>
     </div>`;
   },
 
@@ -517,7 +558,7 @@ wire.talk = (id) => {
       if (fresh.length) openWordSheet(b('Neue Wörter aus dem Gespräch', 'Cuvinte noi din conversație'), fresh);
     } catch {}
   };
-  const stop = runLive(id, { onText, onDone: (sec) => { store.markTalked(sec); suggestWords(); } });
+  const stop = runLive(id, { onText, onDone: (sec) => { store.markTalked(sec, id); suggestWords(); } });
   return () => { stop(); box.removeEventListener('click', onBoxClick); };
 };
 
@@ -568,7 +609,7 @@ wire.translator = () => {
     navigator.clipboard?.writeText(txt).then(() => toast(bt('Kopiert', 'Copiat'))).catch(() => {});
   };
   app.addEventListener('click', onCopy);
-  const stop = runLive('translator', { onText, onDone: () => store.daily({ translated: true }) });
+  const stop = runLive('translator', { onText, onDone: (sec) => { store.track('translate', sec); store.daily({ translated: true }); } });
   return () => { stop(); app.removeEventListener('click', onCopy); };
 };
 

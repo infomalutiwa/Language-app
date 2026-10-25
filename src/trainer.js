@@ -124,7 +124,7 @@ function freeView(st) {
   </div>`;
 }
 
-const bumpSentences = () => store.daily({ sentences: (store.get().daily.sentences ?? 0) + 1 });
+const bumpSentences = () => (store.track('sentences'), store.daily({ sentences: (store.get().daily.sentences ?? 0) + 1 }));
 
 export function trainerWire(app, st, ctx) {
   const rerender = () => ctx.rerender();

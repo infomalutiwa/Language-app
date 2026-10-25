@@ -12,6 +12,7 @@ const defaults = () => ({
   vocab: [],
   daily: { date: todayStr(), talked: false, reviewed: false, translated: false, sec: 0, newWords: 0 },
   history: [],
+  log: [],
   lastScenario: null,
 });
 
@@ -27,6 +28,7 @@ function sanitize(raw) {
       .map((w) => ({ ex: '', ro: '', interval: 0, ease: 2.3, added: Date.now(), ...w, due: Number.isFinite(w.due) ? w.due : Date.now() })),
     daily: { ...d.daily, ...(isObj(r.daily) ? r.daily : {}) },
     history: (Array.isArray(r.history) ? r.history : []).filter((x) => typeof x === 'string'),
+    log: (Array.isArray(r.log) ? r.log : []).filter((e) => isObj(e) && Number.isFinite(e.ts) && typeof e.kind === 'string').slice(-1500),
     lastScenario: typeof r.lastScenario === 'string' ? r.lastScenario : null,
   };
 }
@@ -49,8 +51,22 @@ export const store = {
   set(patch) { Object.assign(state, patch); save(); },
   setting(patch) { state.settings = { ...state.settings, ...patch }; save(); },
   daily(patch) { rollDay(); state.daily = { ...state.daily, ...patch }; save(); },
-  markTalked(sec) {
+  // Activity journal: kind = talk | translate (seconds) or review | words | sentences (counts).
+  track(kind, amount = 1, extra = '') {
+    state.log = [...state.log.slice(-1499), { ts: Date.now(), kind, amount, extra }];
+    save();
+  },
+  // Per local day over the last n days (oldest first): seconds talked / interpreted, counts of learning actions.
+  activity(n = 14) {
+    const days = [];
+    for (let i = n - 1; i >= 0; i--) days.push({ day: localDay(Date.now() - i * 864e5), talk: 0, translate: 0, review: 0, words: 0, sentences: 0 });
+    const by = Object.fromEntries(days.map((d) => [d.day, d]));
+    for (const e of state.log) { const d = by[localDay(e.ts)]; if (d && e.kind in d) d[e.kind] += e.amount; }
+    return days;
+  },
+  markTalked(sec, scenario = '') {
     rollDay();
+    store.track('talk', sec, scenario);
     state.daily.talked = true;
     state.daily.sec += sec;
     state.history = [...new Set([...state.history, todayStr()])];
@@ -77,6 +93,7 @@ export const store = {
     if (!key || state.vocab.some((w) => w.de.toLowerCase() === key)) return false;
     rollDay();
     state.daily.newWords = (state.daily.newWords ?? 0) + 1;
+    store.track('words');
     state.vocab.push({ de: de.trim(), ro: ro?.trim() ?? '', ex, due: Date.now(), interval: 0, ease: 2.3, added: Date.now() });
     save();
     return true;
@@ -88,6 +105,7 @@ export const store = {
   grade(de, grade) {
     const w = state.vocab.find((x) => x.de === de);
     if (!w) return;
+    store.track('review');
     if (grade === 0) { w.interval = 0; w.ease = Math.max(1.3, w.ease - 0.2); w.due = Date.now() + 60_000; }
     else {
       const base = w.interval === 0 ? 1 : w.interval;

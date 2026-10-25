@@ -355,3 +355,14 @@ h1 .bi .de, h2 .bi .de, h3 .bi .de, .sect .bi .de { color: var(--de-ink); }
 .bub.me .de { color: var(--ink); }
 .transcript { gap: 12px; }
 .talk-head .pill[aria-pressed="true"] { background: var(--ro-bg); color: var(--ro-ink); }
+
+/* v0.8 progress proof */
+.verdict { padding: 20px 22px; } .verdict h2 { margin: 0 0 6px; }
+.verdict.v-ok { background: color-mix(in srgb, var(--ok) 16%, transparent); }
+.verdict.v-tr { background: color-mix(in srgb, var(--fix) 18%, transparent); }
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.stat { padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; }
+.stat strong { font-size: 1.5rem; }
+.ptable { padding: 8px 14px; }
+.prow { display: grid; grid-template-columns: 1.6fr 1fr 1fr 1fr 28px; gap: 6px; padding: 9px 0; font-size: .9rem; align-items: center; border-bottom: 1px solid color-mix(in srgb, var(--ink) 8%, transparent); }
+.prow:last-child { border-bottom: 0; } .prow.head { font-size: .75rem; color: var(--ink2); }
