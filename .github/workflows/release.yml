@@ -26,25 +26,18 @@ jobs:
       - run: npm test
       - name: Restore signing key
         env:
-          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          SIGNING: ${{ secrets.VORBI_SIGNING }}
         run: |
-          echo "$KEYSTORE_B64" | base64 -d > android/vorbi-release.jks
+          test -n "$SIGNING" || { echo "Secret VORBI_SIGNING is missing"; exit 1; }
+          PASS=$(echo "$SIGNING" | sed -n 1p)
+          echo "$SIGNING" | sed -n 2p | base64 -d > android/vorbi-release.jks
           {
             echo "storeFile=vorbi-release.jks"
-            echo "storePassword=$KEYSTORE_PASSWORD"
-            echo "keyAlias=$KEY_ALIAS"
-            echo "keyPassword=$KEY_PASSWORD"
+            echo "storePassword=$PASS"
+            echo "keyAlias=vorbi"
+            echo "keyPassword=$PASS"
           } > android/keystore.properties
-      - name: Server address must be set
-        env:
-          VITE_API_BASE: ${{ vars.VITE_API_BASE }}
-        run: test -n "$VITE_API_BASE" || { echo "Set the repository variable VITE_API_BASE to your https server URL"; exit 1; }
       - name: Build APK
-        env:
-          VITE_API_BASE: ${{ vars.VITE_API_BASE }}
         run: npm run android
       - name: Verify the signature
         run: $ANDROID_HOME/build-tools/36.0.0/apksigner verify --print-certs android/app/build/outputs/apk/release/app-release.apk
