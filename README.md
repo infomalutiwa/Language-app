@@ -7,7 +7,10 @@ Dolmetscher-Modus, lokales Vokabeltraining. Keine Konten, alle Daten bleiben auf
 
 ```
 npm install
-cp .env.example .env     # GEMINI_API_KEY eintragen (.env ist git-ignoriert)
+# Key verschlüsselt ablegen (AES-256-GCM, scrypt):
+GEMINI_API_KEY=... KEY_PASSPHRASE=<mind. 12 Zeichen> node scripts/encrypt-key.mjs   # gibt GEMINI_API_KEY_ENC aus
+# GEMINI_API_KEY_ENC in .env, KEY_PASSPHRASE in .env.secret (beide git-ignoriert).
+# Beim Hosting: GEMINI_API_KEY oder GEMINI_API_KEY_ENC + KEY_PASSPHRASE als Secrets setzen.
 npm run build && npm start    # http://localhost:8787
 npm run dev                   # Vite-Dev-Server (Port 5173) + API
 ```

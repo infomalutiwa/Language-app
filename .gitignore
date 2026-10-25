@@ -2,3 +2,4 @@ node_modules
 dist
 .env
 server/.usage.json
+.env.secret

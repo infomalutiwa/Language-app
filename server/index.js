@@ -4,6 +4,7 @@ import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { GoogleGenAI, Modality } from '@google/genai';
 import { createUsage } from './usage.js';
+import { loadApiKey } from './secrets.js';
 import { buildInstruction, SCENARIOS } from './prompts.js';
 import { createRouter, classifyError, rankLive, rankText, DEFAULT_LIVE, DEFAULT_TEXT } from './models.js';
 
@@ -22,21 +23,21 @@ const translateCount = new Map();
 let translateDay = '';
 
 const usage = createUsage(join(root, 'server', '.usage.json'));
-const ai = process.env.GEMINI_API_KEY
-  ? new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY, httpOptions: { apiVersion: 'v1alpha' } })
-  : null;
+let API_KEY = null;
+try { API_KEY = loadApiKey(); } catch (e) { console.error(`API key not available: ${e.message}`); }
+const ai = API_KEY ? new GoogleGenAI({ apiKey: API_KEY, httpOptions: { apiVersion: 'v1alpha' } }) : null;
 
 const router = createRouter({ live: [...PIN_LIVE, ...DEFAULT_LIVE], text: [...PIN_TEXT, ...DEFAULT_TEXT] });
 
 // Ask the API which models exist, so newer ones are used automatically.
 async function discoverModels() {
-  if (!process.env.GEMINI_API_KEY) return;
+  if (!API_KEY) return;
   try {
     const models = [];
     let pageToken = '';
     do {
       const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?pageSize=200${pageToken ? `&pageToken=${pageToken}` : ''}`, {
-        headers: { 'x-goog-api-key': process.env.GEMINI_API_KEY },
+        headers: { 'x-goog-api-key': API_KEY },
       });
       if (!r.ok) throw new Error(`models.list ${r.status}`);
       const body = await r.json();
@@ -285,4 +286,4 @@ createServer(async (req, res) => {
     console.error(key, e.message);
     json(res, 500, { error: 'server_error' });
   }
-}).listen(PORT, () => console.log(`Vorbi server on :${PORT}${ai ? '' : ' - GEMINI_API_KEY missing'}`));
+}).listen(PORT, () => console.log(`Vorbi server on :${PORT}${ai ? '' : ' - no API key (set GEMINI_API_KEY or GEMINI_API_KEY_ENC + KEY_PASSPHRASE)'}`));
