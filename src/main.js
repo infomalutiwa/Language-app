@@ -682,7 +682,7 @@ function openUpdateSheet(info) {
   </div>`, (root) => {
     let path = null;
     root.onclick = async (e) => {
-      if (e.target.closest('[data-close]')) return closeSheet();
+      if (e.target.closest('[data-close]')) { dismissedUpdate = info.latest; return closeSheet(); }
       const go = e.target.closest('#upgo');
       if (!go || go.disabled) return;
       go.disabled = true;
@@ -706,12 +706,13 @@ function openUpdateSheet(info) {
   });
 }
 
+let dismissedUpdate = '';
 async function runUpdateCheck({ manual = false } = {}) {
   if (!updatesEnabled) return;
   try {
     const info = await checkForUpdate();
     if (info.available) {
-      if (manual || !/^#\/(talk|translator)/.test(location.hash)) openUpdateSheet(info);
+      if (manual || (info.latest !== dismissedUpdate && !/^#\/(talk|translator)/.test(location.hash))) openUpdateSheet(info);
     } else if (manual) toast(bt('Du hast die neueste Version', 'Ai ultima versiune'));
   } catch {
     if (manual) toast(bt('Update-Suche fehlgeschlagen', 'Căutarea a eșuat'));
@@ -721,3 +722,10 @@ async function runUpdateCheck({ manual = false } = {}) {
 window.addEventListener('hashchange', route);
 route();
 playIntro().then(() => { if (store.get().settings.autoUpdate) runUpdateCheck(); });
+// The app usually stays alive in the background, so look again whenever it comes back to the front.
+let lastUpdateCheck = Date.now();
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible' || !store.get().settings.autoUpdate || Date.now() - lastUpdateCheck < 5 * 60e3 || $('.sheet')) return;
+  lastUpdateCheck = Date.now();
+  runUpdateCheck();
+});
