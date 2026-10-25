@@ -3,7 +3,7 @@ import { icon } from './icons.js';
 import { store } from './store.js';
 import { api } from './api.js';
 import { SCENARIOS, scenarioById } from './data.js';
-import { PACKS, packById } from './words.js';
+import { PACKS, packById, TOTAL_WORDS } from './words.js';
 import { LiveSession } from './live.js';
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -182,17 +182,24 @@ const views = {
     </div>`;
   },
 
-  packs() {
+  packs(arg, st = {}) {
     const today = store.get().daily.newWords ?? 0;
+    const q = (st.q ?? '').toLowerCase();
+    const lvl = st.lvl ?? 'Alle';
+    const list = PACKS.filter((p) => (lvl === 'Alle' || p.level === lvl) && (!q || `${p.t.join(' ')} ${p.words.map((w) => w.join(' ')).join(' ')}`.toLowerCase().includes(q)));
+    const have = store.get().vocab.length;
     return `<div class="stack">
       <div class="row between"><h1>${b('Wortpakete', 'Pachete de cuvinte')}</h1><a class="pill ghost sm" href="#/vocab">${b('Wiederholen', 'Repetă')}</a></div>
-      <p class="muted" style="margin:0">${b(`Heute neu: ${today}. Lerne 5 pro Tag, dann sitzt der Alltag.`, `Azi noi: ${today}. Învață 5 pe zi și viața de zi cu zi devine ușoară.`)}</p>
-      <div class="grid">${PACKS.map((p) => {
-        const have = p.words.filter(([de]) => store.hasWord(de)).length;
+      <p class="muted" style="margin:0">${b(`${PACKS.length} Pakete, ${TOTAL_WORDS} Wörter. Gelernt: ${have}. Heute neu: ${today}/5.`, `${PACKS.length} pachete, ${TOTAL_WORDS} cuvinte. Învățate: ${have}. Azi noi: ${today}/5.`)}</p>
+      <label class="search glass-2">${icon('search')}<input id="pq" type="search" placeholder="${bt('Wort oder Thema suchen', 'Caută cuvânt sau temă')}" value="${esc(st.q ?? '')}" aria-label="${bt('Suchen', 'Caută')}"></label>
+      <div class="filters" role="group" aria-label="${bt('Niveau', 'Nivel')}">${['Alle', 'A1', 'A2', 'B1'].map((l) => `<button class="pill ${l === lvl ? 'on' : 'ghost'}" data-plvl="${l}">${l === 'Alle' ? b('Alle', 'Toate') : l}</button>`).join('')}</div>
+      <div class="grid">${list.map((p) => {
+        const got = p.words.filter(([de]) => store.hasWord(de)).length;
         return `<button class="scn glass tap" style="--h:${p.hue}" data-pack="${p.id}"><span class="ico">${icon(p.icon)}</span><h3>${b(...p.t)}</h3>
-          <div class="meter" style="position:relative"><i style="width:${(have / p.words.length) * 100}%"></i></div>
-          <span class="muted small" style="position:relative">${have} / ${p.words.length}</span></button>`;
+          <div class="meter" style="position:relative"><i style="width:${(got / p.words.length) * 100}%"></i></div>
+          <span class="meta"><span class="tag">${p.level}</span><span class="tag">${got} / ${p.words.length}</span></span></button>`;
       }).join('')}</div>
+      ${list.length ? '' : `<p class="empty muted">${b('Nichts gefunden.', 'Nu am găsit nimic.')}</p>`}
     </div>`;
   },
 
@@ -266,7 +273,7 @@ const HINTS = [
 
 // ---------- view wiring ----------
 let current = { view: '', cleanup: null };
-const uiState = { scenarios: {}, vocab: {} };
+const uiState = { scenarios: {}, vocab: {}, packs: {} };
 
 const wire = {};
 
@@ -496,13 +503,22 @@ wire.vocab = () => {
 };
 
 wire.packs = () => {
+  const st = uiState.packs;
   app.onclick = (e) => {
+    const lv = e.target.closest('[data-plvl]');
+    if (lv) { st.lvl = lv.dataset.plvl; return rerender(); }
     const p = e.target.closest('[data-pack]');
     if (!p) return;
     const pack = packById(p.dataset.pack);
     openWordSheet(b(...pack.t), pack.words);
   };
-  // Refresh progress bars after the sheet closes.
+  $('#pq').oninput = (e) => {
+    st.q = e.target.value;
+    const pos = e.target.selectionStart;
+    rerender();
+    const q = $('#pq'); q.focus(); q.setSelectionRange(pos, pos);
+  };
+  // Refresh progress bars after the sheet closes (the search box keeps its focus state).
   const obs = new MutationObserver(() => { if (!$('.sheet')) rerender(); });
   obs.observe($('#sheet-root'), { childList: true });
   return () => { app.onclick = null; obs.disconnect(); };
