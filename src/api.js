@@ -14,12 +14,15 @@ async function post(path, body) {
 export const api = {
   token: (scenario, retry = {}) => {
     const { level, help, voice } = store.get().settings;
-    return post('/api/token', { scenario, level, help, voice, ...retry });
+    // Learner's own words let the tutor practise exactly what they are learning.
+    const words = store.get().vocab.slice(-10).map((w) => w.de);
+    return post('/api/token', { scenario, level, help, voice, words, ...retry });
   },
   liveOk: (sessionId) => post('/api/live-ok', { sessionId }).catch(() => {}),
   end: (sessionId, unusedSec) => post('/api/end', { sessionId, unusedSec }).catch(() => {}),
   status: () => fetch('/api/status').then((r) => r.json()),
   usage: () => post('/api/usage', {}),
+  check: (sentence, word, level) => post('/api/check', { sentence, word, level }),
   words: (transcript) => post('/api/words', { transcript }),
   translate: (text) => post('/api/translate', { text }),
 };

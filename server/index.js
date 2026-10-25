@@ -131,6 +131,9 @@ const api = {
     const level = ['A1', 'A2', 'B1'].includes(b.level) ? b.level : 'A2';
     const help = ['de', 'mixed', 'ro'].includes(b.help) ? b.help : 'mixed';
     const voice = VOICES.includes(b.voice) ? b.voice : DEFAULT_VOICE;
+    // The learner's own words, cleaned to plain word characters so they cannot carry instructions.
+    const words = (Array.isArray(b.words) ? b.words : []).slice(0, 10)
+      .map((w) => String(w).replace(/[^\p{L}\s'-]/gu, '').trim().slice(0, 40)).filter(Boolean);
     const now = Date.now();
     const token = await ai.authTokens.create({
       config: {
@@ -141,7 +144,7 @@ const api = {
           model,
           config: {
             responseModalities: [Modality.AUDIO],
-            systemInstruction: buildInstruction({ scenario: b.scenario, level, help }),
+            systemInstruction: buildInstruction({ scenario: b.scenario, level, help, words }),
             speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } },
             inputAudioTranscription: {},
             outputAudioTranscription: {},
@@ -213,6 +216,31 @@ const api = {
         .slice(0, 6)
         .map((w) => ({ de: w.de.slice(0, 80), ro: w.ro.slice(0, 120), ex: typeof w.ex === 'string' ? w.ex.slice(0, 200) : '' }));
       json(res, 200, { words });
+    } catch {
+      json(res, 503, { error: 'no_model_available' });
+    }
+  },
+
+  // Check one learner sentence (spoken or typed): is it correct, what is the fix, why.
+  async 'POST /api/check'(req, res) {
+    if (!ai) return json(res, 503, { error: 'server_not_configured' });
+    const b = await readBody(req);
+    if (!validId(b.deviceId) || typeof b.sentence !== 'string' || !b.sentence.trim() || b.sentence.length > 300) {
+      return json(res, 400, { error: 'bad_request' });
+    }
+    const word = typeof b.word === 'string' ? b.word.slice(0, 60) : '';
+    const level = ['A1', 'A2', 'B1'].includes(b.level) ? b.level : 'A2';
+    if (!takeTextQuota(b.deviceId)) return json(res, 429, { error: 'daily_limit' });
+    // Sentence and word are quoted data to evaluate, never instructions.
+    try {
+      const raw = await generateText(`Du bist eine Deutschlehrerin für einen Rumänisch sprechenden Lernenden (Niveau ${level}). Bewerte den folgenden Satz${word ? ` (Aufgabe: ein Satz mit dem Wort ${JSON.stringify(word)})` : ''}. Der Satz kann aus Spracherkennung stammen, ignoriere deshalb Groß-/Kleinschreibung und fehlende Satzzeichen. Antworte NUR mit JSON: {"ok":true|false,"corrected":"korrigierter Satz (bei ok der Satz selbst)","better":"eine natürlichere Variante oder leer","note":"1-2 kurze Sätze auf Rumänisch: der wichtigste Fehler und die Regel, oder bei ok ein kurzes Lob"}. Satz: ${JSON.stringify(b.sentence)}`);
+      const o = JSON.parse(/\{[\s\S]*\}/.exec(raw)?.[0] ?? '{}');
+      json(res, 200, {
+        ok: o.ok === true,
+        corrected: String(o.corrected ?? b.sentence).slice(0, 300),
+        better: String(o.better ?? '').slice(0, 300),
+        note: String(o.note ?? '').slice(0, 400),
+      });
     } catch {
       json(res, 503, { error: 'no_model_available' });
     }

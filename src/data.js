@@ -2,6 +2,8 @@
 export const SCENARIOS = [
   { id: 'tutor', t: ['Mit Lehrerin sprechen', 'Vorbește cu profesoara'], d: ['Freies Gespräch, Fragen, Aussprache.', 'Discuție liberă, întrebări, pronunție.'], level: 'A1', min: 10, icon: 'chat', hue: 150,
     starters: [['Wie sagt man das auf Deutsch?', 'Cum se spune asta în germană?'], ['Kannst du das bitte langsamer sagen?', 'Poți să spui asta mai rar?'], ['Was bedeutet das?', 'Ce înseamnă asta?']] },
+  { id: 'sentences', t: ['Sätze live üben', 'Exersează propoziții live'], d: ['Du bildest Sätze, die Lehrerin korrigiert sofort.', 'Formezi propoziții, profesoara corectează pe loc.'], level: 'A1', min: 10, icon: 'mic', hue: 265,
+    starters: [['Ich möchte einen Satz mit „Termin“ bilden.', 'Vreau să formez o propoziție cu „Termin“.'], ['Kannst du den Satz verbessern?', 'Poți corecta propoziția?'], ['Gib mir ein neues Wort.', 'Dă-mi un cuvânt nou.']] },
   { id: 'doctor', t: ['Beim Arzt', 'La medic'], d: ['Termin machen, Beschwerden beschreiben.', 'Programare și descrierea simptomelor.'], level: 'A1', min: 5, icon: 'pulse', hue: 175,
     starters: [['Ich möchte einen Termin machen.', 'Aș vrea să fac o programare.'], ['Ich habe Kopfschmerzen.', 'Mă doare capul.'], ['Seit wann haben Sie das?', 'De când aveți asta?']] },
   { id: 'authority', t: ['Auf dem Amt', 'La primărie / Amt'], d: ['Anmeldung, Unterlagen, Fragen.', 'Înregistrare, acte și întrebări.'], level: 'A2', min: 8, icon: 'building', hue: 265,

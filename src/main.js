@@ -4,15 +4,12 @@ import { store } from './store.js';
 import { api } from './api.js';
 import { SCENARIOS, scenarioById } from './data.js';
 import { PACKS, packById, TOTAL_WORDS } from './words.js';
+import { esc, b, bt, mmss } from './ui.js';
+import { trainerView, trainerWire } from './trainer.js';
 import { LiveSession } from './live.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const app = $('#app');
-const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-// Bilingual label: German large, Romanian small beside it.
-const b = (de, ro) => `<span class="bi">${de}<small lang="ro">${ro}</small></span>`;
-const bt = (de, ro) => `${de} · ${ro}`;
-const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
 // ---------- theme ----------
 function applyPrefs() {
@@ -26,7 +23,7 @@ function applyPrefs() {
 applyPrefs();
 
 // ---------- tabs ----------
-const TABS = [['home', ['Start', 'Acasă'], 'home'], ['scenarios', ['Szenen', 'Scenarii'], 'grid'], ['vocab', ['Wörter', 'Cuvinte'], 'book'], ['settings', ['Optionen', 'Setări'], 'gear']];
+const TABS = [['home', ['Start', 'Acasă'], 'home'], ['scenarios', ['Szenen', 'Scenarii'], 'grid'], ['sentences', ['Sätze', 'Propoziții'], 'mic'], ['vocab', ['Wörter', 'Cuvinte'], 'book'], ['settings', ['Optionen', 'Setări'], 'gear']];
 function renderTabs(view) {
   const tab = view === 'packs' ? 'vocab' : view;
   view = tab;
@@ -91,6 +88,7 @@ const views = {
         ${task(d.talked, b(`Gespräch: ${last.t[0]}`, `Conversație: ${last.t[1]}`), `#/talk/${last.id}`)}
         ${task(d.reviewed, due ? b(`${due} Wörter wiederholen`, `${due} cuvinte de repetat`) : b('Wörter wiederholen (keine fällig)', 'Repetă cuvinte (niciunul)'), '#/vocab')}
         ${task((d.newWords ?? 0) >= 5, b(`5 neue Wörter lernen (${Math.min(d.newWords ?? 0, 5)}/5)`, `Învață 5 cuvinte noi (${Math.min(d.newWords ?? 0, 5)}/5)`), '#/packs')}
+        ${task((d.sentences ?? 0) >= 3, b(`3 Sätze sprechen (${Math.min(d.sentences ?? 0, 3)}/3)`, `Spune 3 propoziții (${Math.min(d.sentences ?? 0, 3)}/3)`), '#/sentences')}
         ${task(d.translated, b('Dolmetscher-Übung (5 Min.)', 'Exercițiu Dolmetscher (5 min)'), '#/translator')}
         <a class="pill primary" href="#/talk/${last.id}">${b('Weiter', 'Continuă')} ${icon('mic')}</a>
       </section>
@@ -181,6 +179,8 @@ const views = {
       ${flipped ? `<div class="answers">${[['Nochmal', 'Din nou'], ['Schwer', 'Greu'], ['Gut', 'Bine'], ['Leicht', 'Ușor']].map(([de, ro], i) => `<button class="pill ghost" data-grade="${i}">${b(de, ro)}</button>`).join('')}</div>` : ''}
     </div>`;
   },
+
+  sentences: (arg, st = {}) => trainerView(st),
 
   packs(arg, st = {}) {
     const today = store.get().daily.newWords ?? 0;
@@ -273,7 +273,7 @@ const HINTS = [
 
 // ---------- view wiring ----------
 let current = { view: '', cleanup: null };
-const uiState = { scenarios: {}, vocab: {}, packs: {} };
+const uiState = { scenarios: {}, vocab: {}, packs: {}, sentences: {} };
 
 const wire = {};
 
@@ -501,6 +501,9 @@ wire.vocab = () => {
   app.onclick = onClick;
   return () => { app.onclick = null; };
 };
+
+// The trainer re-renders itself in place so a running microphone is never torn down.
+wire.sentences = () => trainerWire(app, uiState.sentences, { rerender: () => { app.innerHTML = trainerView(uiState.sentences); }, toast });
 
 wire.packs = () => {
   const st = uiState.packs;
