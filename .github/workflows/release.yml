@@ -35,10 +35,16 @@ jobs:
             echo "keyAlias=$KEY_ALIAS"
             echo "keyPassword=$KEY_PASSWORD"
           } > android/keystore.properties
+      - name: Server address must be set
+        env:
+          VITE_API_BASE: ${{ vars.VITE_API_BASE }}
+        run: test -n "$VITE_API_BASE" || { echo "Set the repository variable VITE_API_BASE to your https server URL"; exit 1; }
       - name: Build APK
         env:
           VITE_API_BASE: ${{ vars.VITE_API_BASE }}
         run: npm run android
+      - name: Verify the signature
+        run: $ANDROID_HOME/build-tools/36.0.0/apksigner verify --print-certs android/app/build/outputs/apk/release/app-release.apk
       - name: Name the artifacts
         run: |
           cp android/app/build/outputs/apk/release/app-release.apk "Vorbi-${GITHUB_REF_NAME}.apk"

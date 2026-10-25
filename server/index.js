@@ -21,6 +21,8 @@ const MAX_SESSION_SEC = 600;
 // Origins the Android app (Capacitor WebView) and local dev use; add more via ALLOWED_ORIGINS.
 const ALLOWED_ORIGINS = new Set(['https://localhost', 'http://localhost', 'capacitor://localhost', ...pins(process.env.ALLOWED_ORIGINS)]);
 const TRANSLATE_DAILY = 150;
+const TRANSLATE_IP_DAILY = Number(process.env.TEXT_IP_DAILY ?? 600);
+const translateIp = new Map();
 const translateCount = new Map();
 let translateDay = '';
 
@@ -58,7 +60,24 @@ async function discoverModels() {
 discoverModels();
 setInterval(discoverModels, 6 * 3600_000).unref();
 
-// Outstanding live reservations, so a refund can only be claimed once and never exceeds what was reserved.
+// Outstanding live reservations. A refund is computed from the server clock (never from client input),
+// can be claimed once, and a session that ran longer than a few seconds is only refunded what it did not use.
+const EARLY_FAIL_SEC = 10;
+const refundFor = (sess, { failed = false, now = Date.now() } = {}) => {
+  const elapsed = Math.ceil((now - sess.at) / 1000);
+  // A connection that failed within seconds never really started; otherwise only unused time comes back.
+  return failed && elapsed < EARLY_FAIL_SEC ? sess.reserved : Math.max(0, sess.reserved - elapsed);
+};
+// Token requests per IP are rate limited, so repeated short sessions cannot be farmed.
+const tokenHits = new Map();
+function allowTokenRequest(ip, now = Date.now()) {
+  const hits = (tokenHits.get(ip) ?? []).filter((t) => now - t < 10 * 60_000);
+  if (hits.length >= 20) { tokenHits.set(ip, hits); return false; }
+  hits.push(now);
+  tokenHits.set(ip, hits);
+  return true;
+}
+setInterval(() => { const n = Date.now(); for (const [ip, h] of tokenHits) if (!h.some((t) => n - t < 10 * 60_000)) tokenHits.delete(ip); }, 600_000).unref();
 const sessions = new Map();
 const newSessionId = () => crypto.randomUUID();
 // A device that just saw a model fail skips it for a while, even before enough devices confirm it.
@@ -83,12 +102,14 @@ async function generateText(contents) {
   throw new Error('no_model_available');
 }
 
-function takeTextQuota(deviceId) {
+function takeTextQuota(deviceId, ip) {
   const day = new Date().toISOString().slice(0, 10);
-  if (day !== translateDay) { translateCount.clear(); translateDay = day; }
+  if (day !== translateDay) { translateCount.clear(); translateIp.clear(); translateDay = day; }
   const n = (translateCount.get(deviceId) ?? 0) + 1;
-  if (n > TRANSLATE_DAILY) return false;
+  const m = (translateIp.get(ip) ?? 0) + 1;
+  if (n > TRANSLATE_DAILY || m > TRANSLATE_IP_DAILY) return false;
   translateCount.set(deviceId, n);
+  translateIp.set(ip, m);
   return true;
 }
 
@@ -96,27 +117,39 @@ const json = (res, status, body) => {
   res.writeHead(status, { 'content-type': 'application/json' });
   res.end(JSON.stringify(body));
 };
-const readBody = (req) => new Promise((resolve, reject) => {
+class HttpError extends Error { constructor(status, code) { super(code); this.status = status; this.code = code; } }
+const readBody = (req, max = 4096) => new Promise((resolve, reject) => {
   let data = '';
-  req.on('data', (c) => { data += c; if (data.length > 4096) reject(new Error('too large')); });
-  req.on('end', () => { try { resolve(JSON.parse(data || '{}')); } catch (e) { reject(e); } });
+  let over = false;
+  req.on('data', (c) => { if (over) return; data += c; if (data.length > max) { over = true; reject(new HttpError(413, 'too_large')); } });
+  req.on('end', () => { if (over) return; try { const v = JSON.parse(data || '{}'); v && typeof v === 'object' && !Array.isArray(v) ? resolve(v) : reject(new HttpError(400, 'bad_json')); } catch { reject(new HttpError(400, 'bad_json')); } });
 });
-const clientIp = (req) => (req.headers['x-forwarded-for']?.split(',')[0] ?? req.socket.remoteAddress ?? '').trim();
+// Behind a proxy (TRUST_PROXY=1) the real client is the LAST x-forwarded-for entry (the one the proxy appended);
+// anything earlier is client-controlled. Without a proxy only the socket address counts.
+const TRUST_PROXY = process.env.TRUST_PROXY === '1';
+const clientIp = (req) => {
+  if (TRUST_PROXY) {
+    const parts = String(req.headers['x-forwarded-for'] ?? '').split(',').map((x) => x.trim()).filter(Boolean);
+    if (parts.length) return parts[parts.length - 1];
+  }
+  return req.socket.remoteAddress ?? '';
+};
 const validId = (s) => typeof s === 'string' && /^[\w-]{8,64}$/.test(s);
 
 const api = {
   async 'POST /api/token'(req, res) {
     if (!ai) return json(res, 503, { error: 'server_not_configured' });
     const b = await readBody(req);
-    if (!validId(b.deviceId) || !(b.scenario in SCENARIOS)) return json(res, 400, { error: 'bad_request' });
+    if (!validId(b.deviceId) || !Object.hasOwn(SCENARIOS, b.scenario)) return json(res, 400, { error: 'bad_request' });
     const ip = clientIp(req);
+    if (!allowTokenRequest(ip)) return json(res, 429, { error: 'rate_limited' });
 
     // The client says its last model failed (quota, closed, ...): refund, note it, and pick the next one.
     const exclude = Array.isArray(b.exclude) ? b.exclude.filter((x) => typeof x === 'string').slice(0, 5) : [];
     const prev = sessions.get(b.retryOf);
     if (prev && prev.deviceId === b.deviceId) {
       sessions.delete(b.retryOf);
-      usage.refund(b.deviceId, ip, prev.reserved);
+      usage.refund(b.deviceId, ip, refundFor(prev, { failed: true }));
       const err = { message: String(b.msg ?? '').slice(0, 300) };
       deviceBad.set(`${b.deviceId}:${prev.model}`, Date.now() + classifyError(err).cooldownMs);
       router.report('live', prev.model, b.deviceId, err);
@@ -176,8 +209,7 @@ const api = {
     const s = sessions.get(b.sessionId);
     if (s && s.deviceId === b.deviceId) {
       sessions.delete(b.sessionId);
-      const unused = Math.max(0, Math.min(s.reserved, Number(b.unusedSec) || 0));
-      usage.refund(b.deviceId, clientIp(req), unused);
+      usage.refund(b.deviceId, clientIp(req), refundFor(s));
     }
     json(res, 200, { remainingSec: usage.remaining(b.deviceId, clientIp(req)) });
   },
@@ -192,7 +224,7 @@ const api = {
     if (!validId(b.deviceId) || typeof b.text !== 'string' || !b.text.trim() || b.text.length > 300) {
       return json(res, 400, { error: 'bad_request' });
     }
-    if (!takeTextQuota(b.deviceId)) return json(res, 429, { error: 'daily_limit' });
+    if (!takeTextQuota(b.deviceId, clientIp(req))) return json(res, 429, { error: 'daily_limit' });
     // `text` is quoted data for translation, never instructions.
     try {
       const ro = await generateText(`Übersetze den folgenden deutschen Text ins Rumänische. Antworte nur mit der Übersetzung. Bei einem einzelnen Nomen: gib den Artikel an (z. B. "der Termin = programare"). Text: ${JSON.stringify(b.text)}`);
@@ -205,11 +237,11 @@ const api = {
   // Pull a few useful new words out of a finished conversation.
   async 'POST /api/words'(req, res) {
     if (!ai) return json(res, 503, { error: 'server_not_configured' });
-    const b = await readBody(req);
+    const b = await readBody(req, 8192);
     if (!validId(b.deviceId) || typeof b.transcript !== 'string' || b.transcript.trim().length < 40 || b.transcript.length > 6000) {
       return json(res, 400, { error: 'bad_request' });
     }
-    if (!takeTextQuota(b.deviceId)) return json(res, 429, { error: 'daily_limit' });
+    if (!takeTextQuota(b.deviceId, clientIp(req))) return json(res, 429, { error: 'daily_limit' });
     // The transcript is quoted data, never instructions.
     try {
       const raw = await generateText(`Ein Rumänisch sprechender Lernender hat Deutsch geübt. Wähle aus dem Gespräch bis zu 6 nützliche Alltags-Wörter oder feste Wendungen, die er wahrscheinlich noch lernen sollte (nicht zu einfach, keine Eigennamen). Nomen mit Artikel (der/die/das). Antworte NUR mit einem JSON-Array: [{"de":"der Termin","ro":"programarea","ex":"Ich habe morgen einen Termin."}]. "ro" ist die rumänische Entsprechung, "ex" ein kurzer deutscher Beispielsatz. Gespräch: ${JSON.stringify(b.transcript)}`);
@@ -233,7 +265,7 @@ const api = {
     }
     const word = typeof b.word === 'string' ? b.word.slice(0, 60) : '';
     const level = ['A1', 'A2', 'B1'].includes(b.level) ? b.level : 'A2';
-    if (!takeTextQuota(b.deviceId)) return json(res, 429, { error: 'daily_limit' });
+    if (!takeTextQuota(b.deviceId, clientIp(req))) return json(res, 429, { error: 'daily_limit' });
     // Sentence and word are quoted data to evaluate, never instructions.
     try {
       const raw = await generateText(`Du bist eine Deutschlehrerin für einen Rumänisch sprechenden Lernenden (Niveau ${level}). Bewerte den folgenden Satz${word ? ` (Aufgabe: ein Satz mit dem Wort ${JSON.stringify(word)})` : ''}. Der Satz kann aus Spracherkennung stammen, ignoriere deshalb Groß-/Kleinschreibung und fehlende Satzzeichen. Antworte NUR mit JSON: {"ok":true|false,"corrected":"korrigierter Satz (bei ok der Satz selbst)","better":"eine natürlichere Variante oder leer","note":"1-2 kurze Sätze auf Rumänisch: der wichtigste Fehler und die Regel, oder bei ok ein kurzes Lob"}. Satz: ${JSON.stringify(b.sentence)}`);
@@ -278,7 +310,18 @@ async function serveStatic(req, res) {
   res.writeHead(404).end('Not found');
 }
 
+const CSP = [
+  "default-src 'self'", "script-src 'self' blob:", "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src https://fonts.gstatic.com", "img-src 'self' data:", "media-src 'self' blob:", "worker-src 'self' blob:",
+  "connect-src 'self' https://generativelanguage.googleapis.com wss://generativelanguage.googleapis.com https://api.github.com",
+  "frame-ancestors 'none'", "base-uri 'self'", "object-src 'none'", "form-action 'self'",
+].join('; ');
+
 createServer(async (req, res) => {
+  res.setHeader('x-content-type-options', 'nosniff');
+  res.setHeader('referrer-policy', 'no-referrer');
+  res.setHeader('content-security-policy', CSP);
+  if (TRUST_PROXY && req.headers['x-forwarded-proto'] === 'https') res.setHeader('strict-transport-security', 'max-age=31536000');
   const origin = req.headers.origin;
   if (origin && ALLOWED_ORIGINS.has(origin)) {
     res.setHeader('access-control-allow-origin', origin);
@@ -294,6 +337,7 @@ createServer(async (req, res) => {
     if (req.method === 'GET') return await serveStatic(req, res);
     res.writeHead(405).end();
   } catch (e) {
+    if (e instanceof HttpError) return json(res, e.status, { error: e.code });
     console.error(key, e.message);
     json(res, 500, { error: 'server_error' });
   }

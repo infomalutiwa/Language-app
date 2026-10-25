@@ -20,14 +20,14 @@ export async function checkForUpdate() {
   const r = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { headers: { accept: 'application/vnd.github+json' } });
   if (!r.ok) throw new Error(`github ${r.status}`);
   const rel = await r.json();
-  const asset = (rel.assets ?? []).find((a) => /\.apk$/i.test(a.name) && a.browser_download_url?.startsWith(`https://github.com/${REPO}/releases/download/`));
+  const asset = (rel.assets ?? []).find((a) => /\.apk$/i.test(a.name) && a.browser_download_url?.startsWith(`https://github.com/${REPO}/releases/download/`) && /^sha256:[0-9a-f]{64}$/i.test(a.digest ?? ''));
   const latest = String(rel.tag_name ?? '').replace(/^v/, '');
   return {
     current: cur.versionName,
     latest,
     available: !!asset && semverCode(latest) > cur.versionCode,
     url: asset?.browser_download_url,
-    sha256: asset?.digest?.startsWith('sha256:') ? asset.digest.slice(7) : undefined,
+    sha256: asset ? asset.digest.slice(7) : undefined,
     size: asset?.size,
     notes: String(rel.body ?? '').slice(0, 1200),
   };

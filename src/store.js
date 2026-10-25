@@ -1,7 +1,9 @@
 // Everything lives on this device. localStorage can throw (private mode), so
 // every access is guarded and the app keeps working from memory.
 const KEY = 'vorbi.v1';
-const todayStr = () => new Date().toISOString().slice(0, 10);
+// Local calendar day, so goals and streaks roll over at the user's midnight, not UTC.
+const localDay = (t = Date.now()) => new Date(t).toLocaleDateString('sv-SE');
+const todayStr = () => localDay();
 const uuid = () => (crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`);
 
 const defaults = () => ({
@@ -13,9 +15,23 @@ const defaults = () => ({
   lastScenario: null,
 });
 
+// Stored data may be partly corrupt (old versions, manual edits): rebuild every field to its expected shape.
+const isObj = (v) => v && typeof v === 'object' && !Array.isArray(v);
+function sanitize(raw) {
+  const d = defaults();
+  const r = isObj(raw) ? raw : {};
+  return {
+    deviceId: typeof r.deviceId === 'string' && /^[\w-]{8,64}$/.test(r.deviceId) ? r.deviceId : d.deviceId,
+    settings: { ...d.settings, ...(isObj(r.settings) ? r.settings : {}) },
+    vocab: (Array.isArray(r.vocab) ? r.vocab : []).filter((w) => isObj(w) && typeof w.de === 'string' && w.de)
+      .map((w) => ({ ex: '', ro: '', interval: 0, ease: 2.3, added: Date.now(), ...w, due: Number.isFinite(w.due) ? w.due : Date.now() })),
+    daily: { ...d.daily, ...(isObj(r.daily) ? r.daily : {}) },
+    history: (Array.isArray(r.history) ? r.history : []).filter((x) => typeof x === 'string'),
+    lastScenario: typeof r.lastScenario === 'string' ? r.lastScenario : null,
+  };
+}
 let state;
-try { state = { ...defaults(), ...JSON.parse(localStorage.getItem(KEY) ?? '{}') }; } catch { state = defaults(); }
-state.settings = { ...defaults().settings, ...state.settings };
+try { state = sanitize(JSON.parse(localStorage.getItem(KEY) ?? '{}')); } catch { state = defaults(); }
 
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} };
 
@@ -45,14 +61,14 @@ export const store = {
     const days = new Set(state.history);
     let n = 0;
     for (let i = 0; i < 400; i++) {
-      const d = new Date(Date.now() - i * 864e5).toISOString().slice(0, 10);
+      const d = localDay(Date.now() - i * 864e5);
       if (days.has(d)) n++; else if (i > 0) break;
     }
     return n;
   },
   weekDots() {
     const out = [];
-    for (let i = 6; i >= 0; i--) out.push(state.history.includes(new Date(Date.now() - i * 864e5).toISOString().slice(0, 10)));
+    for (let i = 6; i >= 0; i--) out.push(state.history.includes(localDay(Date.now() - i * 864e5)));
     return out;
   },
   hasWord: (de) => state.vocab.some((w) => w.de.toLowerCase() === de.trim().toLowerCase()),
@@ -81,5 +97,6 @@ export const store = {
   },
   removeWord(de) { state.vocab = state.vocab.filter((x) => x.de !== de); save(); },
   exportJson: () => JSON.stringify(state, null, 2),
-  wipe() { try { localStorage.removeItem(KEY); } catch {} state = defaults(); save(); },
+  // Wiping learning data keeps the device id (usage limits are tied to it) and the server address.
+  wipe() { const keep = { deviceId: state.deviceId, server: state.settings.server }; state = defaults(); state.deviceId = keep.deviceId; state.settings.server = keep.server; save(); },
 };

@@ -24,11 +24,15 @@ import java.security.MessageDigest;
 import java.util.Locale;
 
 /**
- * Downloads a release APK from GitHub and starts Android's package installer.
- * Only https URLs on github.com are accepted; the installer itself enforces the app signature.
+ * Downloads a release APK from this project's GitHub releases and starts Android's package installer.
+ * The URL must be one of this repository's release assets, the SHA-256 is mandatory and checked, the file must
+ * look like an APK, and Android's installer still enforces that it is signed with this app's key.
  */
 @CapacitorPlugin(name = "Updater")
 public class UpdaterPlugin extends Plugin {
+
+    private static final String ALLOWED_PREFIX = "https://github.com/infomalutiwa/Language-app/releases/download/";
+    private static final long MAX_BYTES = 150L * 1024 * 1024;
 
     private File updateDir() {
         File dir = new File(getContext().getCacheDir(), "updates");
@@ -53,12 +57,18 @@ public class UpdaterPlugin extends Plugin {
     public void download(final PluginCall call) {
         final String url = call.getString("url");
         final String expected = call.getString("sha256");
-        if (url == null || !url.startsWith("https://github.com/")) {
-            call.reject("only https://github.com release URLs are allowed");
+        if (url == null || !url.startsWith(ALLOWED_PREFIX)) {
+            call.reject("only this repository's GitHub release assets are allowed");
+            return;
+        }
+        if (expected == null || !expected.matches("(?i)[0-9a-f]{64}")) {
+            call.reject("a SHA-256 checksum is required");
             return;
         }
         new Thread(() -> {
             HttpURLConnection conn = null;
+            File out = new File(updateDir(), "Vorbi-update.apk");
+            boolean ok = false;
             try {
                 conn = (HttpURLConnection) new URL(url).openConnection();
                 conn.setInstanceFollowRedirects(true);
@@ -69,7 +79,10 @@ public class UpdaterPlugin extends Plugin {
                     return;
                 }
                 long total = conn.getContentLengthLong();
-                File out = new File(updateDir(), "Vorbi-update.apk");
+                if (total > MAX_BYTES) {
+                    call.reject("update file too large");
+                    return;
+                }
                 MessageDigest md = MessageDigest.getInstance("SHA-256");
                 try (InputStream in = conn.getInputStream(); OutputStream os = new FileOutputStream(out)) {
                     byte[] buf = new byte[32768];
@@ -80,6 +93,7 @@ public class UpdaterPlugin extends Plugin {
                         os.write(buf, 0, n);
                         md.update(buf, 0, n);
                         done += n;
+                        if (done > MAX_BYTES) throw new java.io.IOException("update file too large");
                         if (total > 0) {
                             int pct = (int) (done * 100 / total);
                             if (pct != lastPct) {
@@ -93,11 +107,15 @@ public class UpdaterPlugin extends Plugin {
                 }
                 StringBuilder hex = new StringBuilder();
                 for (byte b : md.digest()) hex.append(String.format(Locale.ROOT, "%02x", b));
-                if (expected != null && !expected.isEmpty() && !expected.equalsIgnoreCase(hex.toString())) {
-                    out.delete();
+                if (!expected.equalsIgnoreCase(hex.toString())) {
                     call.reject("checksum mismatch");
                     return;
                 }
+                if (!looksLikeApk(out)) {
+                    call.reject("not an APK file");
+                    return;
+                }
+                ok = true;
                 JSObject r = new JSObject();
                 r.put("path", out.getAbsolutePath());
                 call.resolve(r);
@@ -105,15 +123,25 @@ public class UpdaterPlugin extends Plugin {
                 call.reject("download failed", e);
             } finally {
                 if (conn != null) conn.disconnect();
+                if (!ok) out.delete();
             }
         }).start();
+    }
+
+    private static boolean looksLikeApk(File f) {
+        try (InputStream in = new java.io.FileInputStream(f)) {
+            byte[] m = new byte[4];
+            return in.read(m) == 4 && m[0] == 'P' && m[1] == 'K' && m[2] == 3 && m[3] == 4;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     @PluginMethod
     public void install(PluginCall call) {
         try {
             File apk = new File(call.getString("path", ""));
-            if (!apk.getCanonicalPath().startsWith(updateDir().getCanonicalPath()) || !apk.isFile()) {
+            if (!apk.getCanonicalPath().startsWith(updateDir().getCanonicalPath() + File.separator) || !apk.isFile()) {
                 call.reject("unknown update file");
                 return;
             }

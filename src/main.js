@@ -210,7 +210,7 @@ const views = {
     const have = store.get().vocab.length;
     return `<div class="stack">
       <div class="row between"><h1>${b('Wortpakete', 'Pachete de cuvinte')}</h1><a class="pill ghost sm" href="#/vocab">${b('Wiederholen', 'Repetă')}</a></div>
-      <p class="muted" style="margin:0">${b(`${PACKS.length} Pakete, ${TOTAL_WORDS} Wörter. Gelernt: ${have}. Heute neu: ${today}/5.`, `${PACKS.length} pachete, ${TOTAL_WORDS} cuvinte. Învățate: ${have}. Azi noi: ${today}/5.`)}</p>
+      <p class="muted" style="margin:0">${b(`${PACKS.length} Pakete, ${TOTAL_WORDS} Wörter. Gelernt: ${have}. Heute neu: ${Math.min(today, 5)}/5.`, `${PACKS.length} pachete, ${TOTAL_WORDS} cuvinte. Învățate: ${have}. Azi noi: ${Math.min(today, 5)}/5.`)}</p>
       <label class="search glass-2">${icon('search')}<input id="pq" type="search" placeholder="${bt('Wort oder Thema suchen', 'Caută cuvânt sau temă')}" value="${esc(st.q ?? '')}" aria-label="${bt('Suchen', 'Caută')}"></label>
       <div class="filters" role="group" aria-label="${bt('Niveau', 'Nivel')}">${['Alle', 'A1', 'A2', 'B1'].map((l) => `<button class="pill ${l === lvl ? 'on' : 'ghost'}" data-plvl="${l}">${l === 'Alle' ? b('Alle', 'Toate') : l}</button>`).join('')}</div>
       <div class="grid">${list.map((p) => {
@@ -251,7 +251,7 @@ const views = {
         <div class="item"><div><strong>${b('Daten auf diesem Gerät', 'Date pe acest dispozitiv')}</strong><div class="muted small">${b('Kein Konto. Wörter und Fortschritt bleiben nur hier.', 'Nu există cont. Totul rămâne doar aici.')}</div></div></div>
         <div class="item"><button class="pill ghost" id="export">${b('Exportieren', 'Exportă')}</button><button class="pill danger" id="wipe">${b('Alles löschen', 'Șterge tot')}</button></div>
       </div>
-      <p class="muted small" style="text-align:center">${b('Installieren: In Safari Teilen → Zum Home-Bildschirm.', 'Instalare: în Safari, Partajează → Adaugă pe ecranul principal.')}</p>
+      ${isNative ? '' : `<p class="muted small" style="text-align:center">${b('Installieren: Im Browser-Menü „Zum Startbildschirm hinzufügen“.', 'Instalare: din meniul browserului, „Adaugă pe ecranul principal”.')}</p>`}
     </div>`;
   },
 };
@@ -307,7 +307,7 @@ function route() {
   current.cleanup = null;
   closeSheet();
   const [, view = 'home', arg] = location.hash.split('/');
-  const name = views[view] ? view : 'home';
+  const name = Object.hasOwn(views, view) ? view : 'home';
   document.body.dataset.view = ['talk', 'translator'].includes(name) ? 'talk' : name;
   document.body.dataset.orb = '';
   renderTabs(name);
@@ -318,7 +318,7 @@ function route() {
   current.cleanup = mountWire(name, arg) ?? null;
   current.view = name;
 }
-const rerender = () => { const [, v = 'home', a] = location.hash.split('/'); const name = views[v] ? v : 'home'; app.innerHTML = views[name](a, uiState[name]); current.cleanup?.(); current.cleanup = mountWire(name, a) ?? null; };
+const rerender = () => { const [, v = 'home', a] = location.hash.split('/'); const name = Object.hasOwn(views, v) ? v : 'home'; app.innerHTML = views[name](a, uiState[name]); current.cleanup?.(); current.cleanup = mountWire(name, a) ?? null; };
 
 wire.scenarios = () => {
   const st = uiState.scenarios;
@@ -348,7 +348,7 @@ function openScenarioSheet(id) {
 }
 
 const ERR = {
-  mic: ['Ich höre dein Mikrofon nicht. Erlaube den Zugriff in den Browser-Einstellungen.', 'Nu aud microfonul. Permite accesul în setările browserului.'],
+  mic: ['Ich höre dein Mikrofon nicht. Erlaube den Mikrofonzugriff in den App-Einstellungen von Android.', 'Nu aud microfonul. Permite accesul la microfon în setările aplicației din Android.'],
   limit: ['Das Tageslimit ist erreicht. Komm morgen wieder.', 'Ai folosit limita de azi. Revino mâine.'],
   server: ['Der Server ist noch nicht eingerichtet.', 'Serverul nu este configurat încă.'],
   network: ['Verbindung unterbrochen. Prüfe dein Internet.', 'Conexiunea a căzut. Verifică internetul.'],
@@ -433,7 +433,7 @@ wire.talk = (id) => {
   let cur = null;
   let lastRole = null;
 
-  const words = (t) => esc(t).replace(/([A-Za-zÄÖÜäöüßăâîșțĂÂÎȘȚ]{3,})/g, '<span class="w">$1</span>');
+  const words = (t) => t.split(/([A-Za-zÄÖÜäöüßăâîșțĂÂÎȘȚ]{3,})/).map((tok, i) => (i % 2 ? `<span class="w">${esc(tok)}</span>` : esc(tok))).join('');
   const bubbleEl = (role) => {
     const el = document.createElement('div');
     el.className = `bub ${role === 'me' ? 'me' : ''}`;
@@ -457,7 +457,7 @@ wire.talk = (id) => {
       toast(ok ? bt(`„${word}“ gespeichert`, 'salvat') : bt('Schon gespeichert', 'Deja salvat'));
       if (ok) api.translate(word).then((r) => { const v = store.get().vocab.find((x) => x.de === word); if (v) { v.ro = r.ro; store.set({}); } }).catch(() => {});
     }
-    const ro = e.target.closest('[data-ro]');
+    const ro = e.target.closest('button[data-ro]');
     if (ro) {
       const bub = ro.closest('.bub');
       if (bub.querySelector('.ro')) return bub.querySelector('.ro').remove();

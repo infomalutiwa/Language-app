@@ -285,3 +285,16 @@ body[data-ro="off"] .bi small { display: none; }
 .chips { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 2px 16px 6px; }
 .chip { flex: none; min-height: 48px; }
 .chip .icon { width: 18px; height: 18px; }
+
+/* QA fixes: long text, touch targets, ellipsis, contrast */
+#app { overflow-wrap: anywhere; }
+.talk-head h3 .bi { display: block; min-width: 0; }
+.talk-head h3 .bi, .talk-head h3 .bi small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.talk-head h3 .bi small { display: block; }
+.seg button { min-height: 44px; padding: 4px 14px; }
+.talk-head .pill.sm, .goal { min-height: 44px; }
+.pill.sm { min-height: 40px; }
+:root { --accent-text: #B4430F; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --accent-text: #FF9A5C; } }
+:root[data-theme="dark"] { --accent-text: #FF9A5C; }
+.tab[aria-current="page"] { color: var(--accent-text); }

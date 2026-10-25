@@ -30,7 +30,7 @@ function pickFreeWord() {
 }
 
 export function startSession(st, mode) {
-  Object.assign(st, { mode, i: 0, done: 0, scores: [], stage: mode === 'free' ? 'free' : 'build', listening: false });
+  Object.assign(st, { mode, i: 0, done: 0, scores: [], cur: null, stage: mode === 'free' ? 'free' : 'build', listening: false });
   if (mode === 'build') beginSentence(st, pickQueue());
   if (mode === 'free') beginFree(st);
 }
@@ -132,6 +132,7 @@ export function trainerWire(app, st, ctx) {
 
   const advance = () => {
     stopMic();
+    if (st.cur != null) { st.scores.push(st.cur); st.cur = null; }
     if (st.i + 1 >= st.queue.length) { st.stage = 'summary'; return rerender(); }
     st.i += 1;
     beginSentence(st);
@@ -171,7 +172,7 @@ export function trainerWire(app, st, ctx) {
     if (act === 'mic') {
       return startListen((heard) => {
         st.speak = { heard, cmp: compare(st.target, heard) };
-        st.scores.push(st.speak.cmp.score);
+        st.cur = Math.max(st.cur ?? 0, st.speak.cmp.score);
         if (st.speak.cmp.score >= 0.8 && !st.counted) { st.counted = true; st.done += 1; bumpSentences(); }
         rerender();
       });
@@ -191,7 +192,7 @@ export function trainerWire(app, st, ctx) {
       f.busy = true; f.err = ''; rerender();
       try {
         f.result = await api.check(f.text, f.de, store.get().settings.level);
-        st.done += 1; bumpSentences();
+        if (f.result.ok) { st.done += 1; bumpSentences(); }
         say(f.result.corrected);
       } catch (err) {
         f.err = err.code === 'daily_limit' ? bt('Tageslimit für Prüfungen erreicht.', 'Limita zilnică de verificări a fost atinsă.') : bt('Prüfung gerade nicht möglich.', 'Verificarea nu este posibilă acum.');
