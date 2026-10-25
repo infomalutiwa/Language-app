@@ -24,6 +24,7 @@ export const cleanText = (t) => String(t ?? '').replace(NON_LATIN, '').replace(/
 
 // A text that reads as English (or another foreign language) and as neither German nor Romanian.
 function foreign(t) {
+  if (/[àáèéêëìíòóôõùúûñçœæ¿¡]/i.test(t)) return true;
   const words = t.toLowerCase().match(/[\p{L}']+/gu) ?? [];
   if (words.length < 2 || guessLang(t)) return false;
   return words.filter((w) => EN_WORDS.has(w)).length / words.length >= 0.4;
@@ -38,9 +39,10 @@ export function placeTurn(said, says) {
   const outGuess = guessLang(c);
   if (!inL && outGuess) inL = other(outGuess);
   if (!inL) return { de: '', ro: '' };
+  if (foreign(c)) return { de: '', ro: '', skipped: true };
   const out = { de: '', ro: '', inL };
   out[inL] = a;
   // The translation must be in the other language; if the model repeated the input language, hide it.
-  if (c && outGuess !== inL && !foreign(c)) out[other(inL)] = c;
+  if (c && outGuess === other(inL) && !foreign(c)) out[other(inL)] = c;
   return out;
 }

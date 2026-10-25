@@ -25,3 +25,8 @@ test('placeTurn drops foreign scripts, English and same-language echoes', () => 
   const r = placeTurn('Ich habe Hunger', 'Ich habe Hunger');
   assert.equal(r.ro, '');
 });
+
+test('placeTurn rejects Spanish and French drift', () => {
+  assert.equal(placeTurn('¿Quiere access point a nivel plano?', 'Te relaxezi pe canapea, nu?').skipped, true);
+  assert.equal(placeTurn('', "Tu as l'air très lent").skipped, true);
+});

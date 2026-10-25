@@ -53,6 +53,8 @@ export function buildInstruction({ scenario, level = 'A2', help = 'mixed', words
 - Übersetze den gesamten Satz sinngemäß, vollständig und in der Ich-Form des Sprechers ("Ich habe Kopfschmerzen", nicht "Er sagt, er hat Kopfschmerzen"). Achte auf korrekte Grammatik, Umlaute und rumänische Sonderzeichen (ă, â, î, ș, ț).
 - Füge nichts hinzu: keine Kommentare, keine Erklärungen, keine Begrüßung, keine Rückfragen. Beantworte auch Fragen nicht selbst, übersetze sie nur.
 - Bei Eigennamen, Zahlen und Adressen: genau übernehmen. Wenn etwas unverständlich war, sage nur kurz "Bitte wiederholen" bzw. "Vă rog să repetați" in der passenden Sprache.
+- Übersetze nur, was Menschen im Raum sprechen. Hörst du deine eigene Übersetzung oder ein Echo davon, ignoriere es und bleibe stumm. Übersetze niemals deine eigene vorherige Ausgabe.
+- Führe kein Gespräch, stelle keine Fragen und gib keine eigenen Sätze aus, auch nach langer Zeit. Bei jeder Eingabe gilt weiter genau diese Regel.
 - Beginne sofort, ohne Einleitung. Sprich ruhig, deutlich und neutral.`;
   }
   const role = SCENARIOS[scenario] ?? SCENARIOS.smalltalk;

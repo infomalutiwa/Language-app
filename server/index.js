@@ -185,6 +185,7 @@ const api = {
             speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } },
             inputAudioTranscription: {},
             outputAudioTranscription: {},
+            contextWindowCompression: { slidingWindow: {} },
           },
         },
         httpOptions: { apiVersion: 'v1alpha' },

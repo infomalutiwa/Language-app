@@ -71,6 +71,7 @@ export async function directToken(scenario, retry = {}) {
       speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: VOICES.includes(voice) ? voice : 'Kore' } } },
       inputAudioTranscription: {},
       outputAudioTranscription: {},
+      contextWindowCompression: { slidingWindow: {} },
     },
   };
 }

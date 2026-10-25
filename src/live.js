@@ -63,6 +63,7 @@ export class LiveSession {
 
   async start(scenario) {
     this.cb.onState('connecting');
+    this.interpreter = scenario === 'translator';
     try {
       this.mic = await navigator.mediaDevices.getUserMedia({
         audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
@@ -72,7 +73,7 @@ export class LiveSession {
     }
     this.inCtx = new AudioContext({ latencyHint: 'interactive' });
     this.outCtx = new AudioContext({ sampleRate: OUT_RATE });
-    this.stretch = new Stretcher(Number(store.get().settings.pace) || 1, OUT_RATE);
+    this.stretch = new Stretcher(this.interpreter ? 1 : Number(store.get().settings.pace) || 1, OUT_RATE);
     await Promise.all([this.inCtx.resume(), this.outCtx.resume()]);
 
     // Try the best model first; if it is out of quota or unreachable, the server hands out the next one.
@@ -113,6 +114,8 @@ export class LiveSession {
     this.node.port.onmessage = ({ data }) => {
       this.micLevel = Math.min(1, data.rms * 6);
       if (this.muted || this.closed) return;
+      // Interpreter is half-duplex: the phone speaker must not feed its own translation back into the mic.
+      if (this.interpreter && this.outCtx && (this.sources.size > 0 || this.outCtx.currentTime < this.nextPlay + 0.5)) return;
       try { this.session.sendRealtimeInput({ audio: { data: b64(data.pcm), mimeType: `audio/pcm;rate=${IN_RATE}` } }); } catch {}
     };
     src.connect(this.node);
