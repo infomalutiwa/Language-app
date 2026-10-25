@@ -3,6 +3,7 @@ import { icon } from './icons.js';
 import { store } from './store.js';
 import { api } from './api.js';
 import { SCENARIOS, scenarioById } from './data.js';
+import { PACKS, packById } from './words.js';
 import { LiveSession } from './live.js';
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -27,6 +28,8 @@ applyPrefs();
 // ---------- tabs ----------
 const TABS = [['home', ['Start', 'Acasă'], 'home'], ['scenarios', ['Szenen', 'Scenarii'], 'grid'], ['vocab', ['Wörter', 'Cuvinte'], 'book'], ['settings', ['Optionen', 'Setări'], 'gear']];
 function renderTabs(view) {
+  const tab = view === 'packs' ? 'vocab' : view;
+  view = tab;
   const idx = Math.max(0, TABS.findIndex((t) => t[0] === view));
   $('#tabbar').innerHTML = `<i class="tab-thumb" style="transform:translateX(${idx * 100}%)"></i>` +
     TABS.map(([id, label, ic]) => `<a class="tab tap" href="#/${id}" ${id === view ? 'aria-current="page"' : ''} aria-label="${bt(...label)}">${icon(ic)}<span class="lbl">${b(...label)}</span></a>`).join('');
@@ -87,6 +90,7 @@ const views = {
         <div class="row between"><h3>${b('Heute', 'Azi')}</h3><div class="week" title="${bt('Letzte 7 Tage', 'Ultimele 7 zile')}">${store.weekDots().map((on) => `<i class="${on ? 'on' : ''}"></i>`).join('')}</div></div>
         ${task(d.talked, b(`Gespräch: ${last.t[0]}`, `Conversație: ${last.t[1]}`), `#/talk/${last.id}`)}
         ${task(d.reviewed, due ? b(`${due} Wörter wiederholen`, `${due} cuvinte de repetat`) : b('Wörter wiederholen (keine fällig)', 'Repetă cuvinte (niciunul)'), '#/vocab')}
+        ${task((d.newWords ?? 0) >= 5, b(`5 neue Wörter lernen (${Math.min(d.newWords ?? 0, 5)}/5)`, `Învață 5 cuvinte noi (${Math.min(d.newWords ?? 0, 5)}/5)`), '#/packs')}
         ${task(d.translated, b('Dolmetscher-Übung (5 Min.)', 'Exercițiu Dolmetscher (5 min)'), '#/translator')}
         <a class="pill primary" href="#/talk/${last.id}">${b('Weiter', 'Continuă')} ${icon('mic')}</a>
       </section>
@@ -161,20 +165,34 @@ const views = {
   vocab(arg, st = {}) {
     const due = store.dueWords();
     const total = store.get().vocab.length;
-    if (!total) return `<div class="stack"><h1>${b('Wörter', 'Cuvinte')}</h1><div class="glass card empty stack" style="align-items:center"><h3>${b('Noch keine Wörter', 'Încă nu ai cuvinte')}</h3><p class="muted">${b('Tippe im Gespräch auf ein deutsches Wort, um es hier zu speichern.', 'În timpul unei conversații, atinge un cuvânt german ca să-l salvezi aici.')}</p><a class="pill primary" href="#/scenarios">${b('Gespräch starten', 'Începe o conversație')}</a></div></div>`;
-    if (!due.length) return `<div class="stack"><h1>${b('Wörter', 'Cuvinte')}</h1><div class="glass card empty stack" style="align-items:center"><h3>${b('Für heute geschafft 🎉', 'Gata pentru azi 🎉')}</h3><p class="muted">${b(`${total} Wörter gespeichert. Komm später wieder.`, `${total} cuvinte salvate. Revino mai târziu.`)}</p></div></div>`;
+    if (!total) return `<div class="stack"><h1>${b('Wörter', 'Cuvinte')}</h1><div class="glass card empty stack" style="align-items:center"><h3>${b('Noch keine Wörter', 'Încă nu ai cuvinte')}</h3><p class="muted">${b('Tippe im Gespräch auf ein deutsches Wort, um es hier zu speichern.', 'În timpul unei conversații, atinge un cuvânt german ca să-l salvezi aici.')}</p><a class="pill primary" href="#/packs">${b('Wortpakete ansehen', 'Vezi pachetele de cuvinte')}</a><a class="pill ghost" href="#/scenarios">${b('Gespräch starten', 'Începe o conversație')}</a></div></div>`;
+    if (!due.length) return `<div class="stack"><h1>${b('Wörter', 'Cuvinte')}</h1><div class="glass card empty stack" style="align-items:center"><h3>${b('Für heute geschafft 🎉', 'Gata pentru azi 🎉')}</h3><p class="muted">${b(`${total} Wörter gespeichert. Komm später wieder.`, `${total} cuvinte salvate. Revino mai târziu.`)}</p><a class="pill primary" href="#/packs">${b('Neue Wörter lernen', 'Învață cuvinte noi')}</a></div></div>`;
     const w = due[0];
     const m = /^(der|die|das)\s+(.+)/i.exec(w.de);
     const front = m ? `<span class="art ${m[1].toLowerCase()}">${m[1].toLowerCase()}</span>${esc(m[2])}` : esc(w.de);
     const flipped = st.flip;
     return `<div class="stack" style="align-items:center">
-      <div class="row between" style="width:100%"><h1>${b('Wörter', 'Cuvinte')}</h1><span class="pill glass sm">${st.done ?? 0} / ${(st.done ?? 0) + due.length}</span></div>
+      <div class="row between" style="width:100%"><h1>${b('Wörter', 'Cuvinte')}</h1><a class="pill ghost sm" href="#/packs">${icon('plus')}${b('Pakete', 'Pachete')}</a><span class="pill glass sm">${st.done ?? 0} / ${(st.done ?? 0) + due.length}</span></div>
       <button class="flash glass-2 tap" id="flip" aria-label="${bt('Karte umdrehen', 'Întoarce cartea')}"><div class="stack" style="align-items:center">
         <div class="word">${front}</div>
-        ${flipped ? `<p class="muted" style="font-size:20px;margin:0">${esc(w.ro || '—')}</p>` : `<p class="muted small" style="margin:0">${b('Tippen für Übersetzung', 'Atinge pentru traducere')}</p>`}
+        ${flipped ? `<p class="muted" style="font-size:20px;margin:0">${esc(w.ro || '—')}</p>${w.ex ? `<p class="small" style="margin:0;font-family:var(--font-d)">${esc(w.ex)}</p>` : ''}` : `<p class="muted small" style="margin:0">${b('Tippen für Übersetzung', 'Atinge pentru traducere')}</p>`}
       </div></button>
       <div class="row"><button class="pill ghost" id="say">${icon('play')} ${b('Anhören', 'Ascultă')}</button><button class="pill ghost sm" id="del">${b('Löschen', 'Șterge')}</button></div>
       ${flipped ? `<div class="answers">${[['Nochmal', 'Din nou'], ['Schwer', 'Greu'], ['Gut', 'Bine'], ['Leicht', 'Ușor']].map(([de, ro], i) => `<button class="pill ghost" data-grade="${i}">${b(de, ro)}</button>`).join('')}</div>` : ''}
+    </div>`;
+  },
+
+  packs() {
+    const today = store.get().daily.newWords ?? 0;
+    return `<div class="stack">
+      <div class="row between"><h1>${b('Wortpakete', 'Pachete de cuvinte')}</h1><a class="pill ghost sm" href="#/vocab">${b('Wiederholen', 'Repetă')}</a></div>
+      <p class="muted" style="margin:0">${b(`Heute neu: ${today}. Lerne 5 pro Tag, dann sitzt der Alltag.`, `Azi noi: ${today}. Învață 5 pe zi și viața de zi cu zi devine ușoară.`)}</p>
+      <div class="grid">${PACKS.map((p) => {
+        const have = p.words.filter(([de]) => store.hasWord(de)).length;
+        return `<button class="scn glass tap" style="--h:${p.hue}" data-pack="${p.id}"><span class="ico">${icon(p.icon)}</span><h3>${b(...p.t)}</h3>
+          <div class="meter" style="position:relative"><i style="width:${(have / p.words.length) * 100}%"></i></div>
+          <span class="muted small" style="position:relative">${have} / ${p.words.length}</span></button>`;
+      }).join('')}</div>
     </div>`;
   },
 
@@ -208,6 +226,28 @@ const views = {
 };
 
 const VOICES = ['Kore', 'Puck', 'Charon', 'Fenrir', 'Aoede', 'Leda', 'Orus', 'Zephyr'];
+function wordRows(list) {
+  return list.map(([de, ro, ex], i) => `<div class="phrase row between" style="gap:12px"><div><div class="de">${esc(de)}</div><div class="muted small" lang="ro">${esc(ro)}</div>${ex ? `<div class="small">${esc(ex)}</div>` : ''}</div>
+    <button class="pill ghost sm" data-addword="${i}" ${store.hasWord(de) ? 'disabled aria-label="gespeichert"' : ''}>${store.hasWord(de) ? icon('check') : icon('plus')}</button></div>`).join('');
+}
+function openWordSheet(title, list) {
+  const body = () => `<div class="stack">
+    <div class="row between"><h2>${title}</h2><button class="pill primary sm" id="addall" style="min-height:40px;padding:0 16px">${b('Alle', 'Toate')}</button></div>
+    <div class="stack" style="gap:8px" id="wordlist">${wordRows(list)}</div></div>`;
+  openSheet(body(), (root) => {
+    // Replace (not add) the handler so reopening never stacks listeners on the shared root.
+    root.onclick = (e) => {
+      if (e.target.closest('[data-close]')) return closeSheet();
+      const one = e.target.closest('[data-addword]');
+      const all = e.target.closest('#addall');
+      if (!one && !all) return;
+      (all ? list.map((_, i) => i) : [Number(one.dataset.addword)]).forEach((i) => store.addWord(list[i][0], list[i][1], list[i][2] ?? ''));
+      $('#wordlist').innerHTML = wordRows(list);
+      toast(bt('Gespeichert', 'Salvat'));
+    };
+  });
+}
+
 const STATE = {
   idle: ['Tippe und sprich', 'Atinge și vorbește'], connecting: ['Verbinde …', 'Mă conectez…'], thinking: ['Ich denke nach …', 'Mă gândesc…'],
   listening: ['Ich höre zu …', 'Te ascult…'], speaking: ['Sie spricht …', 'Vorbește…'], ended: ['Gespräch beendet', 'Conversație încheiată'],
@@ -215,7 +255,8 @@ const STATE = {
 // Quick teaching requests, sent to the tutor as text during a live call.
 const HINTS = [
   ['Wie sagt man …?', 'Cum se spune…?', 'Ich möchte etwas auf Deutsch sagen und weiß nicht wie. Frag mich, was ich ausdrücken will, sage es mir dann richtig vor und lass es mich nachsprechen.'],
-  ['Erkläre das', 'Explică', 'Erkläre mir bitte deinen letzten Satz einfach, mit rumänischer Übersetzung der wichtigen Wörter.'],
+  ['Auf Rumänisch erklären', 'Explică în română', 'Erkläre mir bitte das letzte wichtige Wort auf Rumänisch: Bedeutung und Gebrauch, dann ein deutscher Beispielsatz mit rumänischer Übersetzung. Lass mich den deutschen Satz nachsprechen und gehe dann zurück ins Deutsche.'],
+  ['Neue Wörter', 'Cuvinte noi', 'Nenne mir drei neue, nützliche Alltagswörter zu unserem Thema, jeweils mit Artikel, rumänischer Bedeutung und einem kurzen Beispielsatz, und lass mich sie nachsprechen.'],
   ['Aussprache', 'Pronunție', 'Sprich das letzte wichtige Wort langsam in Silben vor, lass mich es nachsprechen und gib mir ehrliches, freundliches Feedback zu meiner Aussprache.'],
   ['Anders sagen', 'Altfel', 'Wie kann man das, was ich zuletzt gesagt habe, natürlicher oder höflicher sagen? Gib mir zwei Alternativen und lass mich eine nachsprechen.'],
   ['Wiederholen', 'Repetă', 'Bitte wiederhole deinen letzten Satz.'],
@@ -361,7 +402,7 @@ wire.talk = (id) => {
   let cur = null;
   let lastRole = null;
 
-  const words = (t) => esc(t).replace(/([A-Za-zÄÖÜäöüß]{3,})/g, '<span class="w">$1</span>');
+  const words = (t) => esc(t).replace(/([A-Za-zÄÖÜäöüßăâîșțĂÂÎȘȚ]{3,})/g, '<span class="w">$1</span>');
   const bubbleEl = (role) => {
     const el = document.createElement('div');
     el.className = `bub ${role === 'me' ? 'me' : ''}`;
@@ -400,7 +441,16 @@ wire.talk = (id) => {
     e.currentTarget.setAttribute('aria-pressed', next);
     e.currentTarget.textContent = next ? 'DE+RO' : 'DE';
   };
-  const stop = runLive(id, { onText, onDone: (sec) => store.markTalked(sec) });
+  const suggestWords = async () => {
+    const transcript = [...box.querySelectorAll('.bub')].map((el) => `${el.classList.contains('me') ? 'Lernender' : 'Lehrerin'}: ${el.dataset.text ?? ''}`).join('\n');
+    if (transcript.length < 80) return;
+    try {
+      const { words } = await api.words(transcript);
+      const fresh = words.filter((w) => !store.hasWord(w.de)).map((w) => [w.de, w.ro, w.ex]);
+      if (fresh.length) openWordSheet(b('Neue Wörter aus dem Gespräch', 'Cuvinte noi din conversație'), fresh);
+    } catch {}
+  };
+  const stop = runLive(id, { onText, onDone: (sec) => { store.markTalked(sec); suggestWords(); } });
   return () => { stop(); box.removeEventListener('click', onBoxClick); };
 };
 
@@ -443,6 +493,19 @@ wire.vocab = () => {
   };
   app.onclick = onClick;
   return () => { app.onclick = null; };
+};
+
+wire.packs = () => {
+  app.onclick = (e) => {
+    const p = e.target.closest('[data-pack]');
+    if (!p) return;
+    const pack = packById(p.dataset.pack);
+    openWordSheet(b(...pack.t), pack.words);
+  };
+  // Refresh progress bars after the sheet closes.
+  const obs = new MutationObserver(() => { if (!$('.sheet')) rerender(); });
+  obs.observe($('#sheet-root'), { childList: true });
+  return () => { app.onclick = null; obs.disconnect(); };
 };
 
 wire.settings = () => {

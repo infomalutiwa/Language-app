@@ -80,6 +80,15 @@ async function generateText(contents) {
   throw new Error('no_model_available');
 }
 
+function takeTextQuota(deviceId) {
+  const day = new Date().toISOString().slice(0, 10);
+  if (day !== translateDay) { translateCount.clear(); translateDay = day; }
+  const n = (translateCount.get(deviceId) ?? 0) + 1;
+  if (n > TRANSLATE_DAILY) return false;
+  translateCount.set(deviceId, n);
+  return true;
+}
+
 const json = (res, status, body) => {
   res.writeHead(status, { 'content-type': 'application/json' });
   res.end(JSON.stringify(body));
@@ -177,15 +186,33 @@ const api = {
     if (!validId(b.deviceId) || typeof b.text !== 'string' || !b.text.trim() || b.text.length > 300) {
       return json(res, 400, { error: 'bad_request' });
     }
-    const day = new Date().toISOString().slice(0, 10);
-    if (day !== translateDay) { translateCount.clear(); translateDay = day; }
-    const n = (translateCount.get(b.deviceId) ?? 0) + 1;
-    if (n > TRANSLATE_DAILY) return json(res, 429, { error: 'daily_limit' });
-    translateCount.set(b.deviceId, n);
+    if (!takeTextQuota(b.deviceId)) return json(res, 429, { error: 'daily_limit' });
     // `text` is quoted data for translation, never instructions.
     try {
       const ro = await generateText(`Übersetze den folgenden deutschen Text ins Rumänische. Antworte nur mit der Übersetzung. Bei einem einzelnen Nomen: gib den Artikel an (z. B. "der Termin = programare"). Text: ${JSON.stringify(b.text)}`);
       json(res, 200, { ro });
+    } catch {
+      json(res, 503, { error: 'no_model_available' });
+    }
+  },
+
+  // Pull a few useful new words out of a finished conversation.
+  async 'POST /api/words'(req, res) {
+    if (!ai) return json(res, 503, { error: 'server_not_configured' });
+    const b = await readBody(req);
+    if (!validId(b.deviceId) || typeof b.transcript !== 'string' || b.transcript.trim().length < 40 || b.transcript.length > 6000) {
+      return json(res, 400, { error: 'bad_request' });
+    }
+    if (!takeTextQuota(b.deviceId)) return json(res, 429, { error: 'daily_limit' });
+    // The transcript is quoted data, never instructions.
+    try {
+      const raw = await generateText(`Ein Rumänisch sprechender Lernender hat Deutsch geübt. Wähle aus dem Gespräch bis zu 6 nützliche Alltags-Wörter oder feste Wendungen, die er wahrscheinlich noch lernen sollte (nicht zu einfach, keine Eigennamen). Nomen mit Artikel (der/die/das). Antworte NUR mit einem JSON-Array: [{"de":"der Termin","ro":"programarea","ex":"Ich habe morgen einen Termin."}]. "ro" ist die rumänische Entsprechung, "ex" ein kurzer deutscher Beispielsatz. Gespräch: ${JSON.stringify(b.transcript)}`);
+      const arr = JSON.parse(/\[[\s\S]*\]/.exec(raw)?.[0] ?? '[]');
+      const words = arr
+        .filter((w) => w && typeof w.de === 'string' && typeof w.ro === 'string')
+        .slice(0, 6)
+        .map((w) => ({ de: w.de.slice(0, 80), ro: w.ro.slice(0, 120), ex: typeof w.ex === 'string' ? w.ex.slice(0, 200) : '' }));
+      json(res, 200, { words });
     } catch {
       json(res, 503, { error: 'no_model_available' });
     }

@@ -8,7 +8,7 @@ const defaults = () => ({
   deviceId: uuid(),
   settings: { theme: 'auto', glass: 'full', level: 'A2', help: 'mixed', translate: true, ro: true, voice: 'Kore' },
   vocab: [],
-  daily: { date: todayStr(), talked: false, reviewed: false, translated: false, sec: 0 },
+  daily: { date: todayStr(), talked: false, reviewed: false, translated: false, sec: 0, newWords: 0 },
   history: [],
   lastScenario: null,
 });
@@ -22,7 +22,7 @@ const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } c
 function rollDay() {
   if (state.daily.date !== todayStr()) {
     if (state.daily.talked) state.history = [...state.history.slice(-29), state.daily.date];
-    state.daily = { date: todayStr(), talked: false, reviewed: false, translated: false, sec: 0 };
+    state.daily = { date: todayStr(), talked: false, reviewed: false, translated: false, sec: 0, newWords: 0 };
     save();
   }
 }
@@ -45,10 +45,13 @@ export const store = {
     for (let i = 6; i >= 0; i--) out.push(state.history.includes(new Date(Date.now() - i * 864e5).toISOString().slice(0, 10)));
     return out;
   },
-  addWord(de, ro) {
+  hasWord: (de) => state.vocab.some((w) => w.de.toLowerCase() === de.trim().toLowerCase()),
+  addWord(de, ro, ex = '') {
     const key = de.trim().toLowerCase();
     if (!key || state.vocab.some((w) => w.de.toLowerCase() === key)) return false;
-    state.vocab.push({ de: de.trim(), ro: ro?.trim() ?? '', due: Date.now(), interval: 0, ease: 2.3, added: Date.now() });
+    rollDay();
+    state.daily.newWords = (state.daily.newWords ?? 0) + 1;
+    state.vocab.push({ de: de.trim(), ro: ro?.trim() ?? '', ex, due: Date.now(), interval: 0, ease: 2.3, added: Date.now() });
     save();
     return true;
   },

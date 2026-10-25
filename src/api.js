@@ -20,5 +20,6 @@ export const api = {
   end: (sessionId, unusedSec) => post('/api/end', { sessionId, unusedSec }).catch(() => {}),
   status: () => fetch('/api/status').then((r) => r.json()),
   usage: () => post('/api/usage', {}),
+  words: (transcript) => post('/api/words', { transcript }),
   translate: (text) => post('/api/translate', { text }),
 };
