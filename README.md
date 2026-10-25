@@ -7,7 +7,7 @@ Dolmetscher-Modus, lokales Vokabeltraining. Keine Konten, alle Daten bleiben auf
 
 ```
 npm install
-export GEMINI_API_KEY=...     # siehe .env.example
+cp .env.example .env     # GEMINI_API_KEY eintragen (.env ist git-ignoriert)
 npm run build && npm start    # http://localhost:8787
 npm run dev                   # Vite-Dev-Server (Port 5173) + API
 ```
