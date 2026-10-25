@@ -12,11 +12,13 @@ async function post(path, body) {
 }
 
 export const api = {
-  token: (scenario) => {
-    const { level, help } = store.get().settings;
-    return post('/api/token', { scenario, level, help });
+  token: (scenario, retry = {}) => {
+    const { level, help, voice } = store.get().settings;
+    return post('/api/token', { scenario, level, help, voice, ...retry });
   },
-  end: (unusedSec) => post('/api/end', { unusedSec }).catch(() => {}),
+  liveOk: (sessionId) => post('/api/live-ok', { sessionId }).catch(() => {}),
+  end: (sessionId, unusedSec) => post('/api/end', { sessionId, unusedSec }).catch(() => {}),
+  status: () => fetch('/api/status').then((r) => r.json()),
   usage: () => post('/api/usage', {}),
   translate: (text) => post('/api/translate', { text }),
 };

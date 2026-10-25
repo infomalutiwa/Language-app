@@ -3,6 +3,7 @@ import { api } from './api.js';
 
 const IN_RATE = 16000;
 const OUT_RATE = 24000;
+const MAX_MODEL_ATTEMPTS = 3;
 
 // Mic worklet: downmix to mono, resample to 16 kHz, emit ~64 ms Int16 chunks.
 const WORKLET = `
@@ -60,43 +61,47 @@ export class LiveSession {
 
   async start(scenario) {
     this.cb.onState('connecting');
-    let tok;
-    try {
-      tok = await api.token(scenario);
-    } catch (e) {
-      return this.fail(e.code === 'daily_limit' ? 'limit' : e.code === 'server_not_configured' ? 'server' : 'network');
-    }
-    this.reserved = tok.reservedSec;
-
     try {
       this.mic = await navigator.mediaDevices.getUserMedia({
         audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       });
     } catch {
-      await api.end(this.reserved);
       return this.fail('mic');
     }
-
     this.inCtx = new AudioContext({ latencyHint: 'interactive' });
     this.outCtx = new AudioContext({ sampleRate: OUT_RATE });
     await Promise.all([this.inCtx.resume(), this.outCtx.resume()]);
 
-    try {
-      const ai = new GoogleGenAI({ apiKey: tok.token, httpOptions: { apiVersion: 'v1alpha' } });
-      this.session = await ai.live.connect({
-        model: tok.model,
-        config: { responseModalities: [Modality.AUDIO] },
-        callbacks: {
-          onopen: () => {},
-          onmessage: (m) => this.onMessage(m),
-          onerror: () => this.fail('network'),
-          onclose: () => { if (!this.closed) this.finish('ended'); },
-        },
-      });
-    } catch {
-      await this.teardown();
-      await api.end(this.reserved);
-      return this.fail('network');
+    // Try the best model first; if it is out of quota or unreachable, the server hands out the next one.
+    const tried = [];
+    let retryOf, msg;
+    for (let attempt = 0; attempt < MAX_MODEL_ATTEMPTS; attempt++) {
+      let tok;
+      try {
+        tok = await api.token(scenario, { retryOf, msg, exclude: tried });
+      } catch (e) {
+        await this.teardown();
+        return this.fail(e.code === 'daily_limit' ? 'limit' : e.code === 'server_not_configured' ? 'server' : 'network');
+      }
+      this.sessionId = tok.sessionId;
+      this.reserved = tok.reservedSec;
+      this.model = tok.model;
+      tried.push(tok.model);
+      try {
+        await this.connect(tok);
+        api.liveOk(tok.sessionId);
+        break;
+      } catch (e) {
+        try { this.session?.close(); } catch {}
+        this.session = null;
+        retryOf = tok.sessionId;
+        msg = String(e?.message ?? e);
+        if (attempt === MAX_MODEL_ATTEMPTS - 1) {
+          await this.teardown();
+          await api.end(this.sessionId, this.reserved);
+          return this.fail('network');
+        }
+      }
     }
 
     await this.inCtx.audioWorklet.addModule(URL.createObjectURL(new Blob([WORKLET], { type: 'text/javascript' })));
@@ -117,6 +122,25 @@ export class LiveSession {
     if (scenario !== 'translator') {
       try { this.session.sendRealtimeInput({ text: 'Beginne jetzt das Gespräch.' }); } catch {}
     }
+  }
+
+  // Resolves on the first server message (setup done); rejects on early error/close/timeout.
+  connect(tok) {
+    return new Promise((resolve, reject) => {
+      let ready = false;
+      const bail = (e) => { if (!ready) { clearTimeout(timer); reject(e); } };
+      const timer = setTimeout(() => bail(new Error('timeout')), 8000);
+      const ai = new GoogleGenAI({ apiKey: tok.token, httpOptions: { apiVersion: 'v1alpha' } });
+      ai.live.connect({
+        model: tok.model,
+        config: { responseModalities: [Modality.AUDIO] },
+        callbacks: {
+          onmessage: (m) => { if (!ready) { ready = true; clearTimeout(timer); resolve(); } this.onMessage(m); },
+          onerror: (e) => (ready ? this.fail('network') : bail(new Error(e?.message ?? 'error'))),
+          onclose: (e) => (ready ? !this.closed && this.finish('ended') : bail(new Error(e?.reason || `closed ${e?.code}`))),
+        },
+      }).then((sess) => { this.session = sess; }, bail);
+    });
   }
 
   tickLevel() {
@@ -188,7 +212,7 @@ export class LiveSession {
     this.closed = true;
     const used = this.startedAt ? Math.round((Date.now() - this.startedAt) / 1000) : 0;
     await this.teardown();
-    if (this.startedAt) await api.end(Math.max(0, this.reserved - used));
+    if (this.startedAt && this.sessionId) await api.end(this.sessionId, Math.max(0, this.reserved - used));
     this.cb.onState(state, { kind: detail, usedSec: used });
   }
 

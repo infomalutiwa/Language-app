@@ -190,10 +190,12 @@ const views = {
       </div>
       <div class="group glass">
         <div class="item">${b('Niveau', 'Nivel')}${seg('level', [['A1', 'A1'], ['A2', 'A2'], ['B1', 'B1']])}</div>
+        <div class="item">${b('Stimme', 'Voce')}<select class="pill ghost sel" id="voice" aria-label="${bt('Stimme', 'Voce')}">${VOICES.map((v) => `<option value="${v}" ${s.voice === v ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
         <div class="item">${b('Hilfe auf Rumänisch', 'Ajutor în română')}${seg('help', [['de', b('Nein', 'Nu')], ['mixed', b('Wenig', 'Puțin')], ['ro', b('Viel', 'Mult')]])}</div>
       </div>
       <div class="group glass">
         <div class="item"><div><strong>${b('Nutzung heute', 'Utilizare azi')}</strong><div class="muted small" id="usage">…</div></div></div>
+        <div class="item"><div><strong>${b('KI-Modelle', 'Modele AI')}</strong><div class="muted small" id="models">…</div></div></div>
         <div class="item"><div class="muted small">${b('Gespräche nutzen die Gemini API. Audio wird zur Verarbeitung an Google gesendet. Das Tageslimit ist kostenlos.', 'Conversațiile folosesc Gemini API. Audio-ul este trimis către Google. Limita zilnică este gratuită.')}</div></div>
       </div>
       <div class="group glass">
@@ -205,6 +207,7 @@ const views = {
   },
 };
 
+const VOICES = ['Kore', 'Puck', 'Charon', 'Fenrir', 'Aoede', 'Leda', 'Orus', 'Zephyr'];
 const STATE = {
   idle: ['Tippe und sprich', 'Atinge și vorbește'], connecting: ['Verbinde …', 'Mă conectez…'], thinking: ['Ich denke nach …', 'Mă gândesc…'],
   listening: ['Ich höre zu …', 'Te ascult…'], speaking: ['Sie spricht …', 'Vorbește…'], ended: ['Gespräch beendet', 'Conversație încheiată'],
@@ -444,6 +447,18 @@ wire.vocab = () => {
 
 wire.settings = () => {
   api.usage().then((r) => { const el = $('#usage'); if (el) el.textContent = `${mmss(r.remainingSec)} min übrig heute · rămase astăzi`; }).catch(() => { const el = $('#usage'); if (el) el.textContent = 'Gerade nicht verfügbar · Indisponibil'; });
+  api.status().then((r) => {
+    const el = $('#models');
+    if (!el) return;
+    const line = (label, list) => {
+      const best = list.find((m) => m.available) ?? list[0];
+      const paused = list.filter((m) => !m.available);
+      return `${label}: ${esc(best?.id ?? '—')}${paused.length ? ` (${paused.length}× pausiert · în pauză)` : ''}`;
+    };
+    el.innerHTML = `${line('Live', r.live)}<br>${line('Text', r.text)}`;
+  }).catch(() => { const el = $('#models'); if (el) el.textContent = '—'; });
+  const voiceEl = $('#voice');
+  if (voiceEl) voiceEl.onchange = () => store.setting({ voice: voiceEl.value });
   app.onclick = (e) => {
     const b = e.target.closest('button');
     if (!b) return;

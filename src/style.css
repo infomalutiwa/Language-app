@@ -216,3 +216,6 @@ body[data-ro="off"] .bi small { display: none; }
 .hints .pill { flex: none; }
 .item .bi { align-items: flex-start; text-align: left; }
 .note { display: block; }
+
+.sel { appearance: none; -webkit-appearance: none; color: var(--ink); padding-right: 16px; text-align: center; }
+.sel option { color: #11201F; }
