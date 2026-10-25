@@ -10,6 +10,7 @@ import { trainerView, trainerWire } from './trainer.js';
 import { playIntro } from './intro.js';
 import { updatesEnabled, checkForUpdate, downloadUpdate, installUpdate, currentVersion } from './updater.js';
 import { LiveSession } from './live.js';
+import { guessLang } from './lang.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const app = $('#app');
@@ -26,9 +27,10 @@ function applyPrefs() {
 applyPrefs();
 
 // ---------- tabs ----------
-const TABS = [['home', ['Start', 'Acasă'], 'home'], ['scenarios', ['Szenen', 'Scenarii'], 'grid'], ['sentences', ['Sätze', 'Propoziții'], 'mic'], ['vocab', ['Wörter', 'Cuvinte'], 'book'], ['settings', ['Optionen', 'Setări'], 'gear']];
+const TABS = [['home', ['Start', 'Acasă'], 'home'], ['scenarios', ['Sprechen', 'Vorbește'], 'chat'], ['translator', ['Dolmetscher', 'Interpret'], 'swap'], ['learn', ['Lernen', 'Învață'], 'book'], ['settings', ['Optionen', 'Setări'], 'gear']];
+const LEARN_VIEWS = ['sentences', 'vocab', 'packs'];
 function renderTabs(view) {
-  const tab = view === 'packs' ? 'vocab' : view;
+  const tab = LEARN_VIEWS.includes(view) ? 'learn' : view === 'talk' ? 'scenarios' : view;
   view = tab;
   const idx = Math.max(0, TABS.findIndex((t) => t[0] === view));
   $('#tabbar').innerHTML = `<i class="tab-thumb" style="transform:translateX(${idx * 100}%)"></i>` +
@@ -96,7 +98,6 @@ const views = {
       <text x="55" y="53" text-anchor="middle" class="ring-n">${doneN}/${goals.length}</text><text x="55" y="72" text-anchor="middle" class="ring-l">${bt('Ziele', 'ținte')}</text></svg>`;
     const needsSetup = !isDirect() && (isNative ? !apiBase() : import.meta.env.VITE_NO_SERVER === '1');
     const streak = store.streak();
-    const stat = (n, de, ro) => `<div class="stat glass"><strong>${n}</strong><span>${b(de, ro)}</span></div>`;
     const act = (href, ic, de, ro, hue) => `<a class="act glass tap" href="${href}" style="--h:${hue}"><span class="ico">${icon(ic)}</span><span class="t">${b(de, ro)}</span></a>`;
     return `<div class="stack dash">
       ${needsSetup ? `<a class="glass card tap" href="#/settings" style="display:block;border-color:var(--accent)"><strong>${b('Fast fertig: Gemini-Key eintragen', 'Aproape gata: introdu cheia Gemini')}</strong><div class="muted small">${b('Kostenlos und ohne Server: Key auf aistudio.google.com/apikey holen und in den Optionen einfügen.', 'Gratuit și fără server: ia cheia de pe aistudio.google.com/apikey și lipește-o în Setări.')}</div></a>` : ''}
@@ -109,16 +110,13 @@ const views = {
         <div class="goal-list">${goals.map((g) => `<a class="goal tap ${g.done ? 'done' : ''}" href="${g.href}"><span class="gi">${g.done ? icon('check') : icon(g.ic)}</span><span class="gt">${g.t}</span></a>`).join('')}</div>
       </section>
       <a class="pill primary cta" href="#/talk/${last.id}">${icon('mic')} ${b(`Weiter: ${last.t[0]}`, `Continuă: ${last.t[1]}`)}</a>
-      <div class="stats">${stat(s.vocab.length, 'Wörter', 'cuvinte')}${stat(due, 'fällig', 'de repetat')}${stat(Math.round((d.sec ?? 0) / 60), 'Min. heute', 'min azi')}</div>
-      <h3 class="sect">${b('Schnellstart', 'Start rapid')}</h3>
+      <h3 class="sect">${b('Loslegen', 'Începe')}</h3>
       <div class="acts">
-        ${act(`#/talk/tutor`, 'chat', 'Lehrerin', 'Profesoara', 150)}
-        ${act('#/sentences', 'mic', 'Sätze', 'Propoziții', 265)}
-        ${act('#/packs', 'book', 'Wortpakete', 'Pachete', 30)}
+        ${act('#/talk/tutor', 'chat', 'Lehrerin', 'Profesoara', 150)}
         ${act('#/translator', 'swap', 'Dolmetscher', 'Interpret', 205)}
+        ${act('#/sentences', 'mic', 'Sätze üben', 'Exersează', 265)}
+        ${act('#/packs', 'book', 'Wortpakete', 'Pachete', 30)}
       </div>
-      <h3 class="sect">${b('Situationen', 'Situații')}</h3>
-      <div class="chips">${SCENARIOS.filter((x) => x.id !== 'tutor').map((x) => `<a class="pill glass chip" href="#/talk/${x.id}">${icon(x.icon)} ${b(...x.t)}</a>`).join('')}</div>
     </div>`;
   },
 
@@ -132,7 +130,7 @@ const views = {
       <span class="meta"><span class="tag">${s.level}</span><span class="tag">${s.min} min</span></span></button>`;
     const pinned = !q && lvl === 'Alle' && scenarioById(lastId);
     return `<div class="stack">
-      <h1>${b('Szenen', 'Scenarii')}</h1>
+      <h1>${b('Sprechen', 'Vorbește')}</h1>
       <label class="search glass-2">${icon('search')}<input id="q" type="search" placeholder="${bt('Situation suchen', 'Caută o situație')}" value="${esc(state.q ?? '')}" aria-label="${bt('Suchen', 'Caută')}"></label>
       <div class="filters" role="group" aria-label="${bt('Niveau', 'Nivel')}">${['Alle', 'A1', 'A2', 'B1'].map((l) => `<button class="pill ${l === lvl ? 'on' : 'ghost'}" data-lvl="${l}">${l === 'Alle' ? b('Alle', 'Toate') : l}</button>`).join('')}</div>
       <div class="grid">${pinned ? card(pinned, true) : ''}${list.filter((s) => !pinned || s.id !== pinned.id).map((s) => card(s)).join('')}</div>
@@ -164,13 +162,28 @@ const views = {
     </div>`;
   },
 
+  learn() {
+    const s = store.get();
+    const due = store.dueWords().length;
+    const d = s.daily;
+    const card = (href, ic, de, ro, sub, cls) => `<a class="learn-card glass tap ${cls}" href="${href}"><span class="ico">${icon(ic)}</span><span class="lt"><strong>${b(de, ro)}</strong><span class="muted small">${sub}</span></span><span class="chev">${icon('back')}</span></a>`;
+    return `<div class="stack">
+      <h1>${b('Lernen', 'Învață')}</h1>
+      <div class="stack">
+        ${card('#/sentences', 'mic', 'Sätze bilden', 'Formează propoziții', bt(`Heute ${Math.min(d.sentences ?? 0, 3)}/3`, `Azi ${Math.min(d.sentences ?? 0, 3)}/3`), 'c-de')}
+        ${card('#/vocab', 'refresh', 'Wiederholen', 'Repetă', due ? bt(`${due} Wörter fällig`, `${due} cuvinte de repetat`) : bt('Alles erledigt', 'Totul făcut'), 'c-ro')}
+        ${card('#/packs', 'book', 'Wortpakete', 'Pachete de cuvinte', bt(`${PACKS.length} Pakete · ${TOTAL_WORDS} Wörter`, `${PACKS.length} pachete · ${TOTAL_WORDS} cuvinte`), 'c-de')}
+      </div>
+      <p class="muted small" style="margin:0">${bt(`${s.vocab.length} Wörter gespeichert`, `${s.vocab.length} cuvinte salvate`)}</p>
+    </div>`;
+  },
+
   translator() {
-    return `<div class="stack" style="min-height:calc(100dvh - 140px)">
+    return `<div class="stack tr-view">
       <div class="row between"><h1>${b('Dolmetscher', 'Interpret')}</h1><span class="pill glass sm" id="timer">0:00</span></div>
-      <div class="tr-card glass-2" id="tr-in"><span class="lang">${b('Du sprichst', 'Tu vorbești')}</span><span class="txt muted">…</span></div>
-      <div class="row" style="justify-content:center"><span class="pill ghost sm">${icon('swap')} RO ↔ DE</span></div>
-      <div class="tr-card glass-2 de" id="tr-out"><span class="lang">${b('Übersetzung', 'Traducere')}</span><span class="txt">…</span></div>
-      <div class="stage" style="margin-top:auto">
+      <div class="lang-key"><span class="tag tag-de">DE</span>${icon('swap')}<span class="tag tag-ro">RO</span><span class="muted small">${bt('Hört beide Sprachen und übersetzt live', 'Ascultă ambele limbi și traduce live')}</span></div>
+      <div class="tr-log" id="tr-log" aria-live="polite"><p class="empty muted" id="tr-empty">${b('Tippe auf den Kreis und lass die beiden sprechen. Jede Aussage wird sofort in die andere Sprache übersetzt.', 'Atinge cercul și lasă-i să vorbească. Fiecare frază e tradusă imediat în cealaltă limbă.')}</p></div>
+      <div class="stage">
         <div class="state-lbl" id="lbl">${b(...STATE.idle)}</div>
         ${orbHtml('idle', true)}
         <div class="controls">
@@ -491,20 +504,51 @@ wire.talk = (id) => {
 };
 
 wire.translator = () => {
-  const inEl = $('#tr-in .txt'), outEl = $('#tr-out .txt');
-  let inBuf = '', outBuf = '', lastRole = null;
+  const log = $('#tr-log');
+  const turns = [];
+  let cur = null, lastRole = null;
+  const other = (l) => (l === 'ro' ? 'de' : 'ro');
+  const tagHtml = (l) => (l ? `<span class="tag tag-${l}">${l.toUpperCase()}</span>` : '<span class="tag">…</span>');
+  const draw = (t) => {
+    const inL = guessLang(t.said);
+    const outL = inL ? other(inL) : guessLang(t.says);
+    const el = t.el;
+    el.querySelector('.said').className = `said ${inL ? `l-${inL}` : ''}`;
+    el.querySelector('.said .tg').innerHTML = tagHtml(inL);
+    el.querySelector('.said p').textContent = t.said;
+    const sy = el.querySelector('.says');
+    sy.className = `says ${outL ? `l-${outL}` : ''}`;
+    sy.querySelector('.tg').innerHTML = tagHtml(outL);
+    sy.querySelector('p').textContent = t.says || '…';
+  };
+  const newTurn = () => {
+    $('#tr-empty')?.remove();
+    const el = document.createElement('div');
+    el.className = 'turn';
+    el.innerHTML = '<div class="said"><span class="tg"></span><p></p></div><div class="says"><span class="tg"></span><p></p></div>';
+    log.append(el);
+    cur = { el, said: '', says: '' };
+    turns.push(cur);
+    return cur;
+  };
   const onText = ({ role, text, final }) => {
     if (final || !text) { lastRole = null; return; }
     if (role === 'me') {
-      if (lastRole !== 'me') { inBuf = ''; outBuf = ''; outEl.textContent = '…'; }
-      inBuf += text; inEl.textContent = inBuf; inEl.classList.remove('muted');
+      if (lastRole !== 'me') newTurn();
+      cur.said += text;
     } else {
-      if (lastRole !== 'ai') outBuf = '';
-      outBuf += text; outEl.textContent = outBuf;
+      if (!cur) newTurn();
+      cur.says += text;
     }
     lastRole = role;
+    draw(cur);
+    log.scrollTo({ top: log.scrollHeight, behavior: 'smooth' });
   };
-  const onCopy = (e) => { if (e.target.closest('#copy')) navigator.clipboard?.writeText(outBuf).then(() => toast(bt('Kopiert', 'Copiat'))).catch(() => {}); };
+  const onCopy = (e) => {
+    if (!e.target.closest('#copy')) return;
+    const txt = turns.map((t) => `${t.said}\n→ ${t.says}`).join('\n\n');
+    navigator.clipboard?.writeText(txt).then(() => toast(bt('Kopiert', 'Copiat'))).catch(() => {});
+  };
   app.addEventListener('click', onCopy);
   const stop = runLive('translator', { onText, onDone: () => store.daily({ translated: true }) });
   return () => { stop(); app.removeEventListener('click', onCopy); };
