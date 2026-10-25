@@ -14,3 +14,33 @@ export function guessLang(text) {
   if (ro === de) return null;
   return ro > de ? 'ro' : 'de';
 }
+
+const EN_WORDS = new Set(['the', 'and', 'is', 'are', 'you', 'what', 'this', 'that', 'with', 'have', 'for', 'not', 'how', 'where', 'please', 'thank', 'thanks', 'hello', 'yes', 'no', 'i', 'my', 'your', 'can', 'do', 'does', 'it', 'to', 'of', 'in', 'on', 'a']);
+const NON_LATIN = /[^\p{Script=Latin}\p{N}\p{P}\p{Z}\p{S}]/gu;
+const other = (l) => (l === 'ro' ? 'de' : 'ro');
+
+// Drops scripts that are neither German nor Romanian (the transcriber sometimes hallucinates Arabic, Cyrillic, CJK ...).
+export const cleanText = (t) => String(t ?? '').replace(NON_LATIN, '').replace(/\s{2,}/g, ' ').trim();
+
+// A text that reads as English (or another foreign language) and as neither German nor Romanian.
+function foreign(t) {
+  const words = t.toLowerCase().match(/[\p{L}']+/gu) ?? [];
+  if (words.length < 2 || guessLang(t)) return false;
+  return words.filter((w) => EN_WORDS.has(w)).length / words.length >= 0.4;
+}
+
+// Sorts one interpreter turn into fixed columns: German left, Romanian right.
+// `said` is the transcribed input, `says` the model's translation. Anything not DE/RO is dropped.
+export function placeTurn(said, says) {
+  const a = cleanText(said), c = cleanText(says);
+  if (foreign(a)) return { de: '', ro: '', skipped: true };
+  let inL = guessLang(a);
+  const outGuess = guessLang(c);
+  if (!inL && outGuess) inL = other(outGuess);
+  if (!inL) return { de: '', ro: '' };
+  const out = { de: '', ro: '', inL };
+  out[inL] = a;
+  // The translation must be in the other language; if the model repeated the input language, hide it.
+  if (c && outGuess !== inL && !foreign(c)) out[other(inL)] = c;
+  return out;
+}

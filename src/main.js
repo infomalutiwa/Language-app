@@ -10,7 +10,7 @@ import { trainerView, trainerWire } from './trainer.js';
 import { playIntro } from './intro.js';
 import { updatesEnabled, checkForUpdate, downloadUpdate, installUpdate, currentVersion } from './updater.js';
 import { LiveSession } from './live.js';
-import { guessLang } from './lang.js';
+import { placeTurn } from './lang.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const app = $('#app');
@@ -566,25 +566,22 @@ wire.translator = () => {
   const log = $('#tr-log');
   const turns = [];
   let cur = null, lastRole = null;
-  const other = (l) => (l === 'ro' ? 'de' : 'ro');
-  const tagHtml = (l) => (l ? `<span class="tag tag-${l}">${l.toUpperCase()}</span>` : '<span class="tag">…</span>');
   const draw = (t) => {
-    const inL = guessLang(t.said);
-    const outL = inL ? other(inL) : guessLang(t.says);
-    const el = t.el;
-    el.querySelector('.said').className = `said ${inL ? `l-${inL}` : ''}`;
-    el.querySelector('.said .tg').innerHTML = tagHtml(inL);
-    el.querySelector('.said p').textContent = t.said;
-    const sy = el.querySelector('.says');
-    sy.className = `says ${outL ? `l-${outL}` : ''}`;
-    sy.querySelector('.tg').innerHTML = tagHtml(outL);
-    sy.querySelector('p').textContent = t.says || '…';
+    const p = placeTurn(t.said, t.says);
+    t.el.hidden = !!p.skipped || (!p.de && !p.ro);
+    for (const l of ['de', 'ro']) {
+      const cell = t.el.querySelector(`.cell.${l}`);
+      cell.querySelector('p').textContent = p[l] || '';
+      cell.classList.toggle('empty', !p[l]);
+      cell.classList.toggle('src', p.inL === l);
+    }
   };
   const newTurn = () => {
     $('#tr-empty')?.remove();
     const el = document.createElement('div');
     el.className = 'turn';
-    el.innerHTML = '<div class="said"><span class="tg"></span><p></p></div><div class="says"><span class="tg"></span><p></p></div>';
+    el.innerHTML = '<div class="cell de"><span class="tag tag-de">DE</span><p></p></div><div class="cell ro"><span class="tag tag-ro">RO</span><p></p></div>';
+    el.hidden = true;
     log.append(el);
     cur = { el, said: '', says: '' };
     turns.push(cur);
@@ -605,7 +602,7 @@ wire.translator = () => {
   };
   const onCopy = (e) => {
     if (!e.target.closest('#copy')) return;
-    const txt = turns.map((t) => `${t.said}\n→ ${t.says}`).join('\n\n');
+    const txt = turns.map((t) => { const p = placeTurn(t.said, t.says); return p.de || p.ro ? `DE: ${p.de}\nRO: ${p.ro}` : ''; }).filter(Boolean).join('\n\n');
     navigator.clipboard?.writeText(txt).then(() => toast(bt('Kopiert', 'Copiat'))).catch(() => {});
   };
   app.addEventListener('click', onCopy);
