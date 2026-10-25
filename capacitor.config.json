@@ -1,0 +1,8 @@
+{
+  "appId": "app.vorbi.german",
+  "appName": "Vorbi",
+  "webDir": "dist",
+  "backgroundColor": "#0B1416",
+  "android": { "allowMixedContent": false },
+  "server": { "androidScheme": "https" }
+}

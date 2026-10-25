@@ -6,7 +6,7 @@ const uuid = () => (crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toSt
 
 const defaults = () => ({
   deviceId: uuid(),
-  settings: { theme: 'auto', glass: 'full', level: 'A2', help: 'mixed', translate: true, ro: true, voice: 'Kore' },
+  settings: { theme: 'auto', glass: 'full', level: 'A2', help: 'mixed', translate: true, ro: true, voice: 'Kore', server: '' },
   vocab: [],
   daily: { date: todayStr(), talked: false, reviewed: false, translated: false, sec: 0, newWords: 0 },
   history: [],

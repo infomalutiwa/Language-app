@@ -1,10 +1,10 @@
 import './style.css';
 import { icon } from './icons.js';
 import { store } from './store.js';
-import { api } from './api.js';
+import { api, apiBase } from './api.js';
 import { SCENARIOS, scenarioById } from './data.js';
 import { PACKS, packById, TOTAL_WORDS } from './words.js';
-import { esc, b, bt, mmss } from './ui.js';
+import { esc, b, bt, mmss, isNative } from './ui.js';
 import { trainerView, trainerWire } from './trainer.js';
 import { LiveSession } from './live.js';
 
@@ -82,6 +82,7 @@ const views = {
     const last = scenarioById(s.lastScenario) ?? SCENARIOS[0];
     const task = (done, label, href) => `<a class="task tap ${done ? 'done' : ''}" href="${href}"><span class="dot">${done ? icon('check') : ''}</span><span class="t">${label}</span></a>`;
     return `<div class="stack">
+      ${isNative && !apiBase() ? `<a class="glass card tap" href="#/settings" style="display:block;border-color:var(--err)"><strong>${b('Server-Adresse fehlt', 'Lipsește adresa serverului')}</strong><div class="muted small">${b('Trage in den Optionen die Adresse deines Vorbi-Servers ein.', 'Introdu în Setări adresa serverului tău Vorbi.')}</div></a>` : ''}
       <div class="hero"><p class="muted" style="margin:0">${greet}</p><h1>${b('Lass uns<br>Deutsch sprechen.', 'Hai să vorbim germană.')}</h1></div>
       <section class="glass card stack" aria-label="${bt('Heute', 'Azi')}">
         <div class="row between"><h3>${b('Heute', 'Azi')}</h3><div class="week" title="${bt('Letzte 7 Tage', 'Ultimele 7 zile')}">${store.weekDots().map((on) => `<i class="${on ? 'on' : ''}"></i>`).join('')}</div></div>
@@ -218,6 +219,7 @@ const views = {
         <div class="item">${b('Stimme', 'Voce')}<select class="pill ghost sel" id="voice" aria-label="${bt('Stimme', 'Voce')}">${VOICES.map((v) => `<option value="${v}" ${s.voice === v ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
         <div class="item">${b('Hilfe auf Rumänisch', 'Ajutor în română')}${seg('help', [['de', b('Nein', 'Nu')], ['mixed', b('Wenig', 'Puțin')], ['ro', b('Viel', 'Mult')]])}</div>
       </div>
+      ${isNative ? `<div class="group glass"><div class="item" style="flex-wrap:wrap"><div><strong>${b('Server-Adresse', 'Adresa serverului')}</strong><div class="muted small">https://…</div></div><input id="server" class="glass-2 free-box" style="padding:10px 14px;font-size:16px" inputmode="url" autocapitalize="off" autocomplete="off" value="${esc(s.server || apiBase())}" placeholder="https://vorbi.example.com"></div></div>` : ''}
       <div class="group glass">
         <div class="item"><div><strong>${b('Nutzung heute', 'Utilizare azi')}</strong><div class="muted small" id="usage">…</div></div></div>
         <div class="item"><div><strong>${b('KI-Modelle', 'Modele AI')}</strong><div class="muted small" id="models">…</div></div></div>
@@ -539,6 +541,14 @@ wire.settings = () => {
     };
     el.innerHTML = `${line('Live', r.live)}<br>${line('Text', r.text)}`;
   }).catch(() => { const el = $('#models'); if (el) el.textContent = '—'; });
+  const serverEl = $('#server');
+  if (serverEl) serverEl.onchange = () => {
+    const v = serverEl.value.trim().replace(/\/+$/, '');
+    if (v && !/^https:\/\/[^\s/]+/.test(v)) return toast(bt('Nur https://-Adressen', 'Doar adrese https://'));
+    store.setting({ server: v });
+    toast(bt('Gespeichert', 'Salvat'));
+    api.usage().then((r) => { const el = $('#usage'); if (el) el.textContent = `${mmss(r.remainingSec)} min`; }).catch(() => toast(bt('Server nicht erreichbar', 'Serverul nu răspunde')));
+  };
   const voiceEl = $('#voice');
   if (voiceEl) voiceEl.onchange = () => store.setting({ voice: voiceEl.value });
   app.onclick = (e) => {

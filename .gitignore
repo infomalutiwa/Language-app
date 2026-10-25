@@ -3,3 +3,4 @@ dist
 .env
 server/.usage.json
 .env.secret
+release/

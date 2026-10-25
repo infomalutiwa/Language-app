@@ -26,3 +26,18 @@ Ohne Konten ist das ein weiches Limit. Model-Namen sind per Env überschreibbar 
 ## Tests
 
 `npm test`
+
+## Android (APK / AAB)
+
+Capacitor verpackt die Web-App. Die App ruft den gehosteten Server auf (Adresse beim Build per
+`VITE_API_BASE=https://dein-server` oder später in den Optionen der App unter „Server-Adresse“).
+
+```
+export ANDROID_HOME=~/android-sdk      # SDK mit platform 36 + build-tools
+# android/keystore.properties + android/vorbi-release.jks anlegen (siehe .gitignore; NICHT einchecken, sichern!)
+VITE_API_BASE=https://dein-server npm run android
+# -> android/app/build/outputs/apk/release/app-release.apk  (APK)
+# -> android/app/build/outputs/bundle/release/app-release.aab  (Play Store)
+```
+
+Der Server erlaubt die Origins der App (`https://localhost`, `capacitor://localhost`); weitere über `ALLOWED_ORIGINS`.

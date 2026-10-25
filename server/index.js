@@ -18,6 +18,8 @@ const pins = (v) => (v ?? '').split(',').map((x) => x.trim()).filter(Boolean);
 const PIN_LIVE = pins(process.env.GEMINI_LIVE_MODEL);
 const PIN_TEXT = pins(process.env.GEMINI_TEXT_MODEL);
 const MAX_SESSION_SEC = 600;
+// Origins the Android app (Capacitor WebView) and local dev use; add more via ALLOWED_ORIGINS.
+const ALLOWED_ORIGINS = new Set(['https://localhost', 'http://localhost', 'capacitor://localhost', ...pins(process.env.ALLOWED_ORIGINS)]);
 const TRANSLATE_DAILY = 150;
 const translateCount = new Map();
 let translateDay = '';
@@ -277,6 +279,15 @@ async function serveStatic(req, res) {
 }
 
 createServer(async (req, res) => {
+  const origin = req.headers.origin;
+  if (origin && ALLOWED_ORIGINS.has(origin)) {
+    res.setHeader('access-control-allow-origin', origin);
+    res.setHeader('vary', 'origin');
+    res.setHeader('access-control-allow-methods', 'GET, POST, OPTIONS');
+    res.setHeader('access-control-allow-headers', 'content-type');
+    res.setHeader('access-control-max-age', '600');
+  }
+  if (req.method === 'OPTIONS') return res.writeHead(204).end();
   const key = `${req.method} ${new URL(req.url, 'http://x').pathname}`;
   try {
     if (api[key]) return await api[key](req, res);

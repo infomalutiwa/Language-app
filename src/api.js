@@ -1,7 +1,11 @@
 import { store } from './store.js';
 
+// In the web app the API is same-origin. In the Android app it is the hosted server:
+// a build-time default (VITE_API_BASE) that can be overridden in the settings.
+export const apiBase = () => (store.get().settings.server || import.meta.env.VITE_API_BASE || '').replace(/\/+$/, '');
+
 async function post(path, body) {
-  const r = await fetch(path, {
+  const r = await fetch(apiBase() + path, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ deviceId: store.get().deviceId, ...body }),
@@ -20,7 +24,7 @@ export const api = {
   },
   liveOk: (sessionId) => post('/api/live-ok', { sessionId }).catch(() => {}),
   end: (sessionId, unusedSec) => post('/api/end', { sessionId, unusedSec }).catch(() => {}),
-  status: () => fetch('/api/status').then((r) => r.json()),
+  status: () => fetch(apiBase() + '/api/status').then((r) => r.json()),
   usage: () => post('/api/usage', {}),
   check: (sentence, word, level) => post('/api/check', { sentence, word, level }),
   words: (transcript) => post('/api/words', { transcript }),

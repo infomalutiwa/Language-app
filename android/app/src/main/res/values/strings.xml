@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Vorbi</string>
+    <string name="title_activity_main">Vorbi</string>
+    <string name="package_name">app.vorbi.german</string>
+    <string name="custom_url_scheme">app.vorbi.german</string>
+</resources>
