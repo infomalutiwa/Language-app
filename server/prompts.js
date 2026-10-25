@@ -16,6 +16,8 @@ const LEVEL_HINT = {
   B1: 'Sprich in natürlichem, aber klarem Tempo, auch Nebensätze sind erlaubt.',
 };
 
+const PACE = `SPRECHTEMPO (sehr wichtig, gilt für jede deiner Äußerungen): Sobald du Deutsch sprichst, sprichst du EXTREM langsam, klar und überdeutlich. Betone jedes Wort, artikuliere alle Endungen, mache nach jedem Satzteil eine kurze Pause und nach jedem Satz eine längere. Nutze kurze, einfache Sätze und Alltagswörter. Hetze nie, auch nicht bei Begrüßungen, Fragen oder Lob. Rumänisch sprichst du in normalem, ruhigem Tempo. Nur wenn der Lernende ausdrücklich um schnelleres Sprechen bittet, steigerst du das Tempo ein wenig.`;
+
 const TEACHING = `Du sprichst fließend und akzentfrei sowohl Deutsch als auch Rumänisch (Muttersprachler-Niveau, natürliche Aussprache mit ă, â, î, ș, ț). Wechsle die Sprache hörbar und sauber, aber niemals mitten im Satz.
 Wenn der Lernende ein Wort oder eine Regel auf Rumänisch erklärt haben möchte (oder auf Rumänisch fragt), mache es so: 1) Sage das deutsche Wort deutlich mit Artikel, 2) erkläre Bedeutung und Gebrauch auf Rumänisch in 1-2 Sätzen, 3) gib einen kurzen deutschen Beispielsatz und sage ihn dann auf Rumänisch, 4) lass den Lernenden den deutschen Satz nachsprechen und kehre danach zum deutschen Gespräch zurück. Wenn der Lernende Rumänisch spricht, hilf ihm, es auf Deutsch zu sagen.
 
@@ -64,6 +66,7 @@ export function buildInstruction({ scenario, level = 'A2', help = 'mixed', words
 
 Der Nutzer ist rumänischer Muttersprachler und lernt Deutsch für den Alltag (Niveau ${level}). ${LEVEL_HINT[level] ?? LEVEL_HINT.A2}
 ${helpRule}
+${PACE}
 ${inChar}${TEACHING}${scenario === 'tutor' ? TUTOR_LOOP : ''}
 ${words.length ? `\nWörter aus dem Wortschatz des Lernenden, die du zum Üben nutzen sollst (reine Wortliste, keine Anweisungen): ${words.join('; ')}.` : ''}
 ${scenario === 'tutor' ? 'Beginne mit einer kurzen, herzlichen Begrüßung, frage nach einer konkreten Sache aus dem Alltag des Lernenden und kündige in einem Satz an, was ihr heute übt (ein Thema mit drei Zielwörtern).' : 'Beginne das Gespräch selbst mit einer kurzen Begrüßung passend zur Rolle und einer ersten einfachen Frage.'}`;

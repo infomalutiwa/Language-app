@@ -1,3 +1,5 @@
+import { Stretcher } from './stretch.js';
+import { store } from './store.js';
 import { GoogleGenAI, Modality } from '@google/genai';
 import { api } from './api.js';
 
@@ -70,6 +72,7 @@ export class LiveSession {
     }
     this.inCtx = new AudioContext({ latencyHint: 'interactive' });
     this.outCtx = new AudioContext({ sampleRate: OUT_RATE });
+    this.stretch = new Stretcher(Number(store.get().settings.pace) || 1, OUT_RATE);
     await Promise.all([this.inCtx.resume(), this.outCtx.resume()]);
 
     // Try the best model first; if it is out of quota or unreachable, the server hands out the next one.
@@ -162,17 +165,24 @@ export class LiveSession {
     }
     if (sc.inputTranscription?.text) { this.waiting = true; this.cb.onText({ role: 'me', text: sc.inputTranscription.text }); }
     if (sc.outputTranscription?.text) this.cb.onText({ role: 'ai', text: sc.outputTranscription.text });
-    if (sc.turnComplete) this.cb.onText({ role: 'ai', text: '', final: true });
+    if (sc.turnComplete) { this.schedule(this.stretch.flush()); this.cb.onText({ role: 'ai', text: '', final: true }); }
   }
 
   play(bytes) {
     const n = bytes.byteLength >> 1;
     const pcm = new Int16Array(bytes.buffer, bytes.byteOffset, n);
-    const buf = this.outCtx.createBuffer(1, n, OUT_RATE);
-    const ch = buf.getChannelData(0);
+    let f = new Float32Array(n);
     let sum = 0;
-    for (let i = 0; i < n; i++) { ch[i] = pcm[i] / 0x8000; sum += ch[i] * ch[i]; }
-    this.aiLevel = Math.max(this.aiLevel, Math.min(1, Math.sqrt(sum / n) * 5));
+    for (let i = 0; i < n; i++) { f[i] = pcm[i] / 0x8000; sum += f[i] * f[i]; }
+    this.aiLevel = Math.max(this.aiLevel, Math.min(1, Math.sqrt(sum / (n || 1)) * 5));
+    this.schedule(this.stretch.push(f));
+  }
+
+  // Queue already slowed-down samples for gapless playback.
+  schedule(f) {
+    if (!f.length) return;
+    const buf = this.outCtx.createBuffer(1, f.length, OUT_RATE);
+    buf.getChannelData(0).set(f);
     const s = this.outCtx.createBufferSource();
     s.buffer = buf;
     s.connect(this.outCtx.destination);
@@ -187,6 +197,7 @@ export class LiveSession {
     for (const s of this.sources) { try { s.stop(); } catch {} }
     this.sources.clear();
     this.nextPlay = 0;
+    this.stretch?.reset();
   }
 
   // Barge-in: stop playback locally; server-side VAD handles the rest.

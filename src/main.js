@@ -252,6 +252,7 @@ const views = {
         <div class="item">${b('Niveau', 'Nivel')}${seg('level', [['A1', 'A1'], ['A2', 'A2'], ['B1', 'B1']])}</div>
         <div class="item">${b('Stimme', 'Voce')}<select class="pill ghost sel" id="voice" aria-label="${bt('Stimme', 'Voce')}">${VOICES.map((v) => `<option value="${v}" ${s.voice === v ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
         <div class="item">${b('Hilfe auf Rumänisch', 'Ajutor în română')}${seg('help', [['de', b('Nein', 'Nu')], ['mixed', b('Wenig', 'Puțin')], ['ro', b('Viel', 'Mult')]])}</div>
+        <div class="item" style="flex-wrap:wrap;gap:8px">${b('Sprechtempo der Lehrerin', 'Ritmul profesoarei')}${seg('pace', [['1', b('Normal', 'Normal')], ['0.8', b('Langsam', 'Lent')], ['0.6', b('Sehr langsam', 'Foarte lent')], ['0.45', b('Extrem', 'Extrem')]])}</div>
       </div>
       <div class="group glass"><div class="item" style="flex-wrap:wrap;gap:10px"><div><strong>${b('Eigener Gemini-Key', 'Cheie Gemini proprie')}</strong><div class="muted small">${b('Kostenlos, ohne Server. Der Key bleibt nur auf diesem Gerät.', 'Gratuit, fără server. Cheia rămâne doar pe acest dispozitiv.')}</div></div>
         <input id="gkey" type="password" class="glass-2 free-box" style="padding:10px 14px;font-size:16px" autocomplete="off" autocapitalize="off" spellcheck="false" value="${esc(s.geminiKey || '')}" placeholder="AIza…">
