@@ -1,7 +1,7 @@
 {
   "name": "vorbi",
   "private": true,
-  "version": "0.8.3",
+  "version": "0.8.4",
   "type": "module",
   "scripts": {
     "dev": "concurrently -k \"node --env-file-if-exists=.env --env-file-if-exists=.env.secret server/index.js\" \"vite\"",

@@ -185,7 +185,9 @@ const api = {
             speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } },
             inputAudioTranscription: {},
             outputAudioTranscription: {},
-            contextWindowCompression: { slidingWindow: {} },
+            ...(b.scenario === 'translator'
+              ? { temperature: 0.2, contextWindowCompression: { triggerTokens: 3000, slidingWindow: { targetTokens: 1000 } } }
+              : { contextWindowCompression: { slidingWindow: {} } }),
           },
         },
         httpOptions: { apiVersion: 'v1alpha' },

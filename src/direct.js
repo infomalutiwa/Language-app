@@ -71,10 +71,15 @@ export async function directToken(scenario, retry = {}) {
       speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: VOICES.includes(voice) ? voice : 'Kore' } } },
       inputAudioTranscription: {},
       outputAudioTranscription: {},
-      contextWindowCompression: { slidingWindow: {} },
+      ...liveTuning(scenario),
     },
   };
 }
+
+// Interpreter: keep only the last few utterances in context and translate close to literally.
+const liveTuning = (scenario) => (scenario === 'translator'
+  ? { temperature: 0.2, contextWindowCompression: { triggerTokens: 3000, slidingWindow: { targetTokens: 1000 } } }
+  : { contextWindowCompression: { slidingWindow: {} } });
 
 export const liveWorked = () => { if (lastLive) router.ok('live', lastLive); };
 export const directStatus = async () => { await discover(); return { voices: VOICES, ...router.snapshot() }; };
